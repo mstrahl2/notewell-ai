@@ -1,11 +1,13 @@
+// api/create-checkout-session.js
 import Stripe from "stripe";
-import * as admin from "firebase-admin";
+import { initializeApp, cert, getApps } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 
-if (!admin.apps.length) {
+if (!getApps().length) {
   const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
+  initializeApp({
+    credential: cert(serviceAccount),
   });
 }
 
@@ -32,25 +34,28 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing priceId in request body" });
     }
 
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return res.status(500).json({ error: "Missing STRIPE_SECRET_KEY" });
+    }
+
+    if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
+      return res.status(500).json({ error: "Missing FIREBASE_SERVICE_ACCOUNT" });
+    }
+
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ error: "Missing or malformed Authorization header" });
     }
 
     const idToken = authHeader.split("Bearer ")[1];
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
-
-    if (!decodedToken.email_verified) {
-      return res.status(403).json({ error: "Email must be verified before upgrading." });
-    }
+    const decodedToken = await getAuth().verifyIdToken(idToken);
 
     const userId = decodedToken.uid;
     const userEmail = decodedToken.email;
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.VITE_PUBLIC_BASE_URL;
-
-    if (!baseUrl) {
-      return res.status(500).json({ error: "Missing frontend base URL." });
-    }
+    const baseUrl =
+      process.env.NEXT_PUBLIC_BASE_URL ||
+      process.env.VITE_PUBLIC_BASE_URL ||
+      "https://notewellai.com";
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -75,7 +80,9 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ url: session.url });
   } catch (err) {
-    console.error("❌ Stripe Checkout Session Error:", err);
-    return res.status(500).json({ error: "Failed to create checkout session" });
+    console.error("Stripe Checkout Session Error:", err);
+    return res.status(500).json({
+      error: err.message || "Failed to create checkout session",
+    });
   }
 }
