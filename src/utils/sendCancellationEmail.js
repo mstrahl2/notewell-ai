@@ -14,7 +14,7 @@ export async function sendCancellationEmail(toEmail) {
     });
 
     const info = await transporter.sendMail({
-      from: `"SOAP App" <${process.env.EMAIL_USER}>`,
+      from: `"NoteWell AI" <${process.env.EMAIL_USER}>`,
       to: toEmail,
       subject: 'Your Subscription Has Been Cancelled',
       html: `
@@ -24,7 +24,7 @@ export async function sendCancellationEmail(toEmail) {
         <br/>
         <p>If you have any questions or would like to resubscribe, feel free to reach out or visit your account page.</p>
         <br/>
-        <p>Thanks,<br/>The SOAP App Team</p>
+        <p>Thanks,<br/>The NoteWell AI Team</p>
       `,
     });
 

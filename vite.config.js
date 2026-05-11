@@ -9,8 +9,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'vite.svg', 'icons/*.png', 'screenshots/*.png'], // Include screenshots too
       manifest: {
-        short_name: 'SOAP App',
-        name: 'SOAP Note Generator',
+        short_name: 'NoteWell AI',
+        name: 'NoteWell AI',
         description: 'Generate professional SOAP notes easily from session notes.',
         start_url: '/',
         display: 'standalone',

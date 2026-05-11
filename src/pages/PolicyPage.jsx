@@ -9,7 +9,7 @@ export default function PrivacyPolicy() {
         Privacy Policy
       </Typography>
       <Typography variant="body1" paragraph>
-        Effective Date: [Insert Date]
+        Effective Date: May 10, 2026
       </Typography>
 
       <Typography variant="h6" gutterBottom>
@@ -53,7 +53,7 @@ export default function PrivacyPolicy() {
         Contact
       </Typography>
       <Typography variant="body1">
-        If you have any questions, contact us at [Your Email Address].
+        If you have any questions, contact us at support@notwellai.com.
       </Typography>
     </Container>
   );

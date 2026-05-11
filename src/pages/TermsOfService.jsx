@@ -10,7 +10,7 @@ export default function TermsOfService() {
       </Typography>
 
       <Typography paragraph>
-        By accessing or using the SOAP App (“Service”), you agree to be bound by
+        By accessing or using the NoteWell AI App (“Service”), you agree to be bound by
         these Terms. If you do not agree, do not use the Service.
       </Typography>
 
