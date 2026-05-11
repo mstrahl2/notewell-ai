@@ -1,6 +1,6 @@
 // src/pages/UpgradeSuccess.jsx
 import React from "react";
-import { Box, Container, Typography, Button } from "@mui/material";
+import { Box, Container, Typography, Button, Alert } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 
 export default function UpgradeSuccess() {
@@ -9,15 +9,16 @@ export default function UpgradeSuccess() {
   return (
     <Container maxWidth="sm" sx={{ py: 6, textAlign: "center" }}>
       <Typography variant="h4" gutterBottom>
-        🎉 You're upgraded!
+        🎉 Upgrade Successful
       </Typography>
+
+      <Alert severity="success" sx={{ my: 3, textAlign: "left" }}>
+        Your subscription was created successfully. It may take a moment for your
+        billing status to refresh in your account.
+      </Alert>
 
       <Typography sx={{ mb: 3 }}>
-        You now have full access to NoteWell AI.
-      </Typography>
-
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-        Start creating unlimited professional SOAP notes instantly.
+        You can now continue creating documentation with your upgraded access.
       </Typography>
 
       <Button
@@ -29,9 +30,11 @@ export default function UpgradeSuccess() {
       </Button>
 
       <Box sx={{ mt: 2 }}>
-        <Button onClick={() => navigate("/dashboard")}>
-          Back to Dashboard
-        </Button>
+        <Button onClick={() => navigate("/my-account")}>View My Account</Button>
+      </Box>
+
+      <Box sx={{ mt: 1 }}>
+        <Button onClick={() => navigate("/dashboard")}>Back to Dashboard</Button>
       </Box>
     </Container>
   );

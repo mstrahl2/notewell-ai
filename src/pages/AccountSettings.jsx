@@ -1,3 +1,4 @@
+// src/pages/AccountSettings.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -13,6 +14,8 @@ import {
   CircularProgress,
   Paper,
   Divider,
+  Stack,
+  Chip,
 } from "@mui/material";
 import { auth } from "../firebase/firebaseConfig";
 import { getProfile } from "../firebase/firestoreHelper";
@@ -25,20 +28,31 @@ export default function AccountSettings() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const prof = await getProfile();
-        setProfile(prof);
-      } catch (err) {
-        console.error("Failed to load profile", err);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchProfile = async () => {
+    try {
+      const prof = await getProfile();
+      setProfile(prof);
+    } catch (err) {
+      console.error("Failed to load profile", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchProfile();
   }, []);
+
+  const formatDate = (timestamp) => {
+    if (!timestamp) return "-";
+
+    const date =
+      typeof timestamp === "object" && timestamp.seconds
+        ? dayjs.unix(timestamp.seconds)
+        : dayjs(timestamp);
+
+    return date.format("MMMM D, YYYY");
+  };
 
   const handleCancelSubscription = async () => {
     setStatus(null);
@@ -46,6 +60,7 @@ export default function AccountSettings() {
 
     try {
       const token = await auth.currentUser.getIdToken();
+
       const res = await fetch("/api/cancel-subscription", {
         method: "POST",
         headers: {
@@ -54,38 +69,18 @@ export default function AccountSettings() {
         },
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        throw new Error("Failed to cancel subscription");
+        throw new Error(data.error || "Failed to cancel subscription");
       }
 
       setStatus("success");
-
-      // Re-fetch profile to update UI
-      const updated = await getProfile();
-      setProfile(updated);
-
-      setTimeout(() => {
-        navigate("/dashboard");
-      }, 4000);
+      await fetchProfile();
     } catch (err) {
       console.error("Cancel error:", err);
       setStatus("error");
     }
-  };
-
-  const hasActiveSubscription =
-    profile?.subscription?.stripeSubscriptionId &&
-    profile?.subscription?.status !== "canceled";
-
-  const subscription = profile?.subscription || {};
-
-  const formatDate = (timestamp) => {
-    if (!timestamp) return "-";
-    const date =
-      typeof timestamp === "object" && timestamp.seconds
-        ? dayjs.unix(timestamp.seconds)
-        : dayjs(timestamp);
-    return date.format("MMMM D, YYYY");
   };
 
   if (loading) {
@@ -96,18 +91,45 @@ export default function AccountSettings() {
     );
   }
 
+  const subscription = profile?.subscription || {};
+  const override = profile?.accessOverride || "none";
+  const tier = profile?.tier || "free";
+
+  const hasPaidSubscription =
+    subscription?.stripeSubscriptionId &&
+    subscription?.status === "active" &&
+    !subscription?.cancel_at_period_end;
+
+  const hasFullOverride = override === "tester" || override === "comped";
+
+  const displayPlan = hasFullOverride
+    ? override === "tester"
+      ? "Tester Full Access"
+      : "Comped Full Access"
+    : hasPaidSubscription
+    ? subscription.planName || tier
+    : tier;
+
+  const displayStatus = hasFullOverride
+    ? "Full access override"
+    : subscription?.cancel_at_period_end
+    ? "Cancels at period end"
+    : subscription?.status || "Free";
+
   return (
-    <Container maxWidth="sm" sx={{ mt: 5 }}>
+    <Container maxWidth="sm" sx={{ mt: 5, mb: 6 }}>
       <Typography variant="h4" gutterBottom>
-        Account Settings
+        My Account
       </Typography>
 
-      <Box mt={3}>
+      <Typography color="text.secondary" sx={{ mb: 3 }}>
+        Manage your profile, plan, and billing settings.
+      </Typography>
+
+      <Stack spacing={2}>
         <Button
           fullWidth
           variant="contained"
-          color="primary"
-          sx={{ mb: 2 }}
           onClick={() => navigate("/profile-update")}
         >
           Update Profile
@@ -117,65 +139,92 @@ export default function AccountSettings() {
           fullWidth
           variant="contained"
           color="secondary"
-          sx={{ mb: 2 }}
-          onClick={() => navigate("/upgrade")}
+          onClick={() => navigate("/upgrade-plan")}
         >
-          Upgrade Plan
+          View Plans
         </Button>
+      </Stack>
 
-        {hasActiveSubscription && (
+      <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+          spacing={2}
+        >
+          <Typography variant="h6">Billing Summary</Typography>
+
+          <Chip
+            label={displayStatus}
+            color={
+              hasPaidSubscription || hasFullOverride
+                ? "success"
+                : subscription?.cancel_at_period_end
+                ? "warning"
+                : "default"
+            }
+            size="small"
+          />
+        </Stack>
+
+        <Divider sx={{ my: 2 }} />
+
+        <Typography sx={{ mb: 1 }}>
+          <strong>Plan:</strong>{" "}
+          {displayPlan.charAt(0).toUpperCase() + displayPlan.slice(1)}
+        </Typography>
+
+        <Typography sx={{ mb: 1 }}>
+          <strong>Status:</strong> {displayStatus}
+        </Typography>
+
+        {subscription?.current_period_end && (
+          <Typography sx={{ mb: 1 }}>
+            <strong>Current Period Ends:</strong>{" "}
+            {formatDate(subscription.current_period_end)}
+          </Typography>
+        )}
+
+        {subscription?.cancel_at_period_end && (
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            Your subscription is scheduled to end on{" "}
+            <strong>{formatDate(subscription.current_period_end)}</strong>. You
+            will keep access until then.
+          </Alert>
+        )}
+
+        {hasFullOverride && (
+          <Alert severity="success" sx={{ mt: 2 }}>
+            Your account currently has no-cost full access.
+          </Alert>
+        )}
+
+        {hasPaidSubscription && (
           <Button
             fullWidth
             variant="outlined"
             color="error"
+            sx={{ mt: 3 }}
             onClick={() => setConfirmOpen(true)}
           >
             Cancel Subscription
           </Button>
         )}
-      </Box>
-
-      {/* Billing Summary */}
-      <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
-        <Typography variant="h6" gutterBottom>
-          Billing Summary
-        </Typography>
-        <Divider sx={{ mb: 2 }} />
-        <Typography>
-          <strong>Plan:</strong>{" "}
-          {subscription.planName ? subscription.planName : "Free"}
-        </Typography>
-        <Typography>
-          <strong>Status:</strong>{" "}
-          {subscription.status ? subscription.status : "N/A"}
-        </Typography>
-        {subscription.cancel_at_period_end && (
-          <Typography color="warning.main">
-            Subscription will end on{" "}
-            <strong>{formatDate(subscription.current_period_end)}</strong>
-          </Typography>
-        )}
-        {subscription.status === "canceled" && (
-          <Typography color="error" sx={{ mt: 1 }}>
-            This subscription was cancelled on{" "}
-            <strong>{formatDate(subscription.cancelRequestedAt)}</strong>.
-          </Typography>
-        )}
       </Paper>
 
-      {/* Alerts */}
       {status === "success" && (
         <Alert severity="success" sx={{ mt: 3 }}>
-          Subscription cancelled successfully. Redirecting to dashboard...
+          Cancellation request submitted. Your access will remain active until
+          the end of the billing period.
         </Alert>
       )}
+
       {status === "error" && (
         <Alert severity="error" sx={{ mt: 3 }}>
           Failed to cancel subscription. Please try again or contact support.
         </Alert>
       )}
 
-      {/* Confirmation Dialog */}
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
         <DialogTitle>Confirm Cancellation</DialogTitle>
         <DialogContent>
