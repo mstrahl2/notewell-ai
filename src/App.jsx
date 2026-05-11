@@ -1,3 +1,4 @@
+// src/App.jsx
 import React, { useEffect, useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
@@ -21,7 +22,7 @@ import AdminPanel from "./pages/AdminPanel";
 import UpgradePlan from "./pages/UpgradePlan";
 import UpgradeSuccess from "./pages/UpgradeSuccess";
 import UpgradeCancelled from "./pages/UpgradeCancelled";
-import CancelSubscription from "./pages/CancelSubscription"; // ✅ New import
+import CancelSubscription from "./pages/CancelSubscription";
 
 import ErrorBoundary from "./components/ErrorBoundary";
 import RequireProfileComplete from "./components/RequireProfileComplete";
@@ -37,8 +38,21 @@ function RequireAuth({ user, children }) {
 }
 
 function RequireAdmin({ profile, children }) {
-  if (!profile || profile.role !== "admin") return <Navigate to="/dashboard" replace />;
+  if (!profile || profile.role !== "admin") {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return children;
+}
+
+function UpgradeRoute({ user }) {
+  return (
+    <RequireAuth user={user}>
+      <ErrorBoundary>
+        <UpgradePlan />
+      </ErrorBoundary>
+    </RequireAuth>
+  );
 }
 
 export default function App() {
@@ -49,18 +63,22 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+
       if (currentUser) {
         try {
           const prof = await getProfile();
           setProfile(prof);
         } catch (err) {
           console.error("Failed to fetch profile:", err);
+          setProfile(null);
         }
       } else {
         setProfile(null);
       }
+
       setAuthChecked(true);
     });
+
     return () => unsubscribe();
   }, []);
 
@@ -89,10 +107,12 @@ export default function App() {
           path="login"
           element={!user ? <Login /> : <Navigate to="/dashboard" replace />}
         />
+
         <Route
           path="signup"
           element={!user ? <Signup /> : <Navigate to="/dashboard" replace />}
         />
+
         <Route path="privacy-policy" element={<PrivacyPolicy />} />
         <Route path="terms-of-service" element={<TermsOfService />} />
         <Route path="disclaimer" element={<Disclaimer />} />
@@ -110,6 +130,7 @@ export default function App() {
             </RequireAuth>
           }
         />
+
         <Route
           path="new-note"
           element={
@@ -120,6 +141,7 @@ export default function App() {
             </RequireAuth>
           }
         />
+
         <Route
           path="my-notes"
           element={
@@ -130,6 +152,7 @@ export default function App() {
             </RequireAuth>
           }
         />
+
         <Route
           path="edit-note/:id"
           element={
@@ -140,6 +163,7 @@ export default function App() {
             </RequireAuth>
           }
         />
+
         <Route
           path="note-detail/:id"
           element={
@@ -150,6 +174,7 @@ export default function App() {
             </RequireAuth>
           }
         />
+
         <Route
           path="profile-update"
           element={
@@ -160,6 +185,7 @@ export default function App() {
             </RequireAuth>
           }
         />
+
         <Route
           path="profile"
           element={
@@ -170,6 +196,7 @@ export default function App() {
             </RequireAuth>
           }
         />
+
         <Route
           path="my-account"
           element={
@@ -180,6 +207,7 @@ export default function App() {
             </RequireAuth>
           }
         />
+
         <Route
           path="cancel-subscription"
           element={
@@ -190,6 +218,7 @@ export default function App() {
             </RequireAuth>
           }
         />
+
         <Route
           path="admin"
           element={
@@ -202,16 +231,11 @@ export default function App() {
             </RequireAuth>
           }
         />
-        <Route
-          path="upgrade"
-          element={
-            <RequireAuth user={user}>
-              <ErrorBoundary>
-                <UpgradePlan />
-              </ErrorBoundary>
-            </RequireAuth>
-          }
-        />
+
+        {/* Support both route names so old and new buttons work */}
+        <Route path="upgrade" element={<UpgradeRoute user={user} />} />
+        <Route path="upgrade-plan" element={<UpgradeRoute user={user} />} />
+
         <Route
           path="upgrade-success"
           element={
@@ -222,6 +246,7 @@ export default function App() {
             </RequireAuth>
           }
         />
+
         <Route
           path="upgrade-cancelled"
           element={
@@ -232,6 +257,7 @@ export default function App() {
             </RequireAuth>
           }
         />
+
         <Route index element={<Navigate to="dashboard" replace />} />
       </Route>
 
