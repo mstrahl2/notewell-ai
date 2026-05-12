@@ -11,33 +11,46 @@ import {
   Alert,
   Chip,
 } from "@mui/material";
-import { getProfile, canUserCreateNote } from "../firebase/firestoreHelper";
+import { getProfile } from "../firebase/firestoreHelper";
 import { useNavigate } from "react-router-dom";
 
-function formatPlanLabel(profile, usage) {
+function getPlanLabel(profile) {
   const override = profile?.accessOverride || "none";
 
   if (override === "tester") return "Tester Full Access";
   if (override === "comped") return "Comped Full Access";
 
-  if (usage?.tier === "paid") {
-    return profile?.subscription?.planName
-      ? profile.subscription.planName.charAt(0).toUpperCase() +
-          profile.subscription.planName.slice(1)
+  const subscription = profile?.subscription;
+
+  if (
+    subscription?.status === "active" &&
+    !subscription?.cancel_at_period_end
+  ) {
+    return subscription?.planName
+      ? subscription.planName.charAt(0).toUpperCase() +
+          subscription.planName.slice(1)
       : "Paid";
   }
 
-  if (usage?.tier === "override") return "Full Access";
-
-  const tier = profile?.tier || usage?.tier || "free";
+  const tier = profile?.tier || "free";
   return tier.charAt(0).toUpperCase() + tier.slice(1);
+}
+
+function hasFullAccess(profile) {
+  const override = profile?.accessOverride || "none";
+  const subscription = profile?.subscription;
+
+  return (
+    override === "tester" ||
+    override === "comped" ||
+    profile?.tier === "unlimited" ||
+    (subscription?.status === "active" && !subscription?.cancel_at_period_end)
+  );
 }
 
 export default function Dashboard() {
   const [profile, setProfile] = useState(null);
-  const [usage, setUsage] = useState(null);
-  const [profileLoading, setProfileLoading] = useState(true);
-  const [usageLoading, setUsageLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const navigate = useNavigate();
@@ -47,7 +60,7 @@ export default function Dashboard() {
 
     async function loadDashboard() {
       try {
-        setProfileLoading(true);
+        setLoading(true);
         setError("");
 
         const userProfile = await getProfile();
@@ -55,26 +68,15 @@ export default function Dashboard() {
         if (!mounted) return;
 
         setProfile(userProfile);
-        setProfileLoading(false);
-
-        try {
-          const usageData = await canUserCreateNote();
-
-          if (!mounted) return;
-
-          setUsage(usageData);
-        } catch (usageErr) {
-          console.error("Failed to load usage:", usageErr);
-        } finally {
-          if (mounted) setUsageLoading(false);
-        }
       } catch (err) {
         console.error("Error loading dashboard:", err);
 
         if (mounted) {
           setError("Failed to load dashboard.");
-          setProfileLoading(false);
-          setUsageLoading(false);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
         }
       }
     }
@@ -89,12 +91,12 @@ export default function Dashboard() {
   const handleUpgrade = () => navigate("/upgrade-plan");
   const handleNewNote = () => navigate("/new-note");
 
-  if (profileLoading) {
+  if (loading) {
     return (
       <Box textAlign="center" mt={4}>
         <CircularProgress />
         <Typography color="text.secondary" sx={{ mt: 2 }}>
-          Loading your dashboard...
+          Loading dashboard...
         </Typography>
       </Box>
     );
@@ -102,8 +104,8 @@ export default function Dashboard() {
 
   const displayName = profile?.preferredName || profile?.firstName || "User";
   const licenseType = profile?.licenseType || "Not set";
-  const planLabel = formatPlanLabel(profile, usage);
-  const unlimited = usage?.allowed === Infinity;
+  const planLabel = getPlanLabel(profile);
+  const fullAccess = hasFullAccess(profile);
 
   return (
     <Box maxWidth={760} mx="auto" mt={{ xs: 2, sm: 4 }}>
@@ -124,7 +126,7 @@ export default function Dashboard() {
           </Typography>
         </Box>
 
-        <Chip label={planLabel} color={unlimited ? "success" : "default"} />
+        <Chip label={planLabel} color={fullAccess ? "success" : "default"} />
       </Stack>
 
       {error && (
@@ -146,29 +148,16 @@ export default function Dashboard() {
             {planLabel}
           </Typography>
 
-          {usageLoading ? (
-            <Stack direction="row" spacing={1} alignItems="center">
-              <CircularProgress size={18} />
-              <Typography variant="body2" color="text.secondary">
-                Checking usage...
-              </Typography>
-            </Stack>
-          ) : unlimited ? (
+          {fullAccess ? (
             <Typography color="text.secondary">
-              Unlimited note access is active.
+              Full note access is active.
             </Typography>
           ) : (
             <>
-              <Typography variant="body2">
-                {usage?.remaining ?? 0} of {usage?.allowed ?? 15} notes
-                remaining this month.
+              <Typography variant="body2" color="text.secondary">
+                Free access includes limited note creation. Usage limits are
+                checked when saving a note.
               </Typography>
-
-              {typeof usage?.remaining === "number" && usage.remaining <= 3 && (
-                <Typography color="error" mt={1}>
-                  You're almost out of notes.
-                </Typography>
-              )}
 
               <Button variant="contained" sx={{ mt: 2 }} onClick={handleUpgrade}>
                 Upgrade Plan
