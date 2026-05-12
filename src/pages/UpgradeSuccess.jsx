@@ -9,7 +9,7 @@ export default function UpgradeSuccess() {
   return (
     <Container maxWidth="sm" sx={{ py: 6, textAlign: "center" }}>
       <Typography variant="h4" gutterBottom>
-        🎉 Upgrade Successful
+        Upgrade Successful
       </Typography>
 
       <Alert severity="success" sx={{ my: 3, textAlign: "left" }}>
