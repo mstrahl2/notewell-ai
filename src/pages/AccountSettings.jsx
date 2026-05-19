@@ -26,6 +26,7 @@ export default function AccountSettings() {
   const [status, setStatus] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [billingLoading, setBillingLoading] = useState(false);
   const navigate = useNavigate();
 
   const fetchProfile = async () => {
@@ -52,6 +53,34 @@ export default function AccountSettings() {
         : dayjs(timestamp);
 
     return date.format("MMMM D, YYYY");
+  };
+
+  const handleManageBilling = async () => {
+    try {
+      setBillingLoading(true);
+      setStatus(null);
+
+      const token = await auth.currentUser.getIdToken();
+
+      const res = await fetch("/api/create-portal-session", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to open billing portal.");
+      }
+
+      window.location.href = data.url;
+    } catch (err) {
+      console.error("Billing portal error:", err);
+      setStatus("portal-error");
+      setBillingLoading(false);
+    }
   };
 
   const handleCancelSubscription = async () => {
@@ -94,6 +123,8 @@ export default function AccountSettings() {
   const subscription = profile?.subscription || {};
   const override = profile?.accessOverride || "none";
   const tier = profile?.tier || "free";
+
+  const hasStripeCustomer = !!subscription?.stripeCustomerId;
 
   const hasPaidSubscription =
     subscription?.stripeSubscriptionId &&
@@ -199,12 +230,24 @@ export default function AccountSettings() {
           </Alert>
         )}
 
+        {hasStripeCustomer && (
+          <Button
+            fullWidth
+            variant="contained"
+            sx={{ mt: 3 }}
+            onClick={handleManageBilling}
+            disabled={billingLoading}
+          >
+            {billingLoading ? "Opening Billing Portal..." : "Manage Billing"}
+          </Button>
+        )}
+
         {hasPaidSubscription && (
           <Button
             fullWidth
             variant="outlined"
             color="error"
-            sx={{ mt: 3 }}
+            sx={{ mt: 2 }}
             onClick={() => setConfirmOpen(true)}
           >
             Cancel Subscription
@@ -222,6 +265,12 @@ export default function AccountSettings() {
       {status === "error" && (
         <Alert severity="error" sx={{ mt: 3 }}>
           Failed to cancel subscription. Please try again or contact support.
+        </Alert>
+      )}
+
+      {status === "portal-error" && (
+        <Alert severity="error" sx={{ mt: 3 }}>
+          Failed to open billing portal. Please try again.
         </Alert>
       )}
 
