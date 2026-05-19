@@ -250,9 +250,23 @@ export default function NewNote() {
         "\n\nSession Summary:\n" +
         cleanedRaw;
 
-      const formatted = generateSoapNote(metadataText, noteType, auditSafe);
+      const formatted = await generateSoapNote(
+        metadataText,
+        noteType,
+        auditSafe,
+        {
+          clientName,
+          sessionDate,
+          sessionLength,
+          riskLevel,
+        }
+      );
+
       setFormattedNote(formatted);
       setSuccess("SOAP note generated.");
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Failed to generate SOAP note.");
     } finally {
       setGenerating(false);
     }
@@ -313,13 +327,24 @@ export default function NewNote() {
 
       {recording && <LinearProgress color="error" sx={{ mb: 2 }} />}
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
+      {success && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {success}
+        </Alert>
+      )}
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="h6">Voice Dictation</Typography>
+
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Speak naturally. NoteWell AI will clean the dictation and format it into a SOAP note.
+          Speak naturally. NoteWell AI will clean the dictation and format it
+          into a SOAP note.
         </Typography>
 
         <Button
@@ -363,8 +388,19 @@ export default function NewNote() {
       </Paper>
 
       <Stack spacing={2}>
-        <TextField label="Note Title" value={title} onChange={(e) => setTitle(e.target.value)} fullWidth />
-        <TextField label="Client Name" value={clientName} onChange={(e) => setClientName(e.target.value)} fullWidth />
+        <TextField
+          label="Note Title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          fullWidth
+        />
+
+        <TextField
+          label="Client Name"
+          value={clientName}
+          onChange={(e) => setClientName(e.target.value)}
+          fullWidth
+        />
 
         <TextField
           label="Session Date"
@@ -375,22 +411,44 @@ export default function NewNote() {
           InputLabelProps={{ shrink: true }}
         />
 
-        <TextField select label="Session Length" value={sessionLength} onChange={(e) => setSessionLength(e.target.value)} fullWidth>
+        <TextField
+          select
+          label="Session Length"
+          value={sessionLength}
+          onChange={(e) => setSessionLength(e.target.value)}
+          fullWidth
+        >
           {["15", "30", "45", "50", "53", "60", "90"].map((v) => (
-            <MenuItem key={v} value={v}>{v} minutes</MenuItem>
+            <MenuItem key={v} value={v}>
+              {v} minutes
+            </MenuItem>
           ))}
         </TextField>
 
-        <TextField select label="Risk Level" value={riskLevel} onChange={(e) => setRiskLevel(e.target.value)} fullWidth>
+        <TextField
+          select
+          label="Risk Level"
+          value={riskLevel}
+          onChange={(e) => setRiskLevel(e.target.value)}
+          fullWidth
+        >
           <MenuItem value="none">None / Not Assessed</MenuItem>
           <MenuItem value="low">Low Risk</MenuItem>
           <MenuItem value="moderate">Moderate Risk</MenuItem>
           <MenuItem value="high">High Risk</MenuItem>
         </TextField>
 
-        <TextField select label="Note Type" value={noteType} onChange={(e) => setNoteType(e.target.value)} fullWidth>
+        <TextField
+          select
+          label="Note Type"
+          value={noteType}
+          onChange={(e) => setNoteType(e.target.value)}
+          fullWidth
+        >
           {noteTypes.map((note) => (
-            <MenuItem key={note.value} value={note.value}>{note.label}</MenuItem>
+            <MenuItem key={note.value} value={note.value}>
+              {note.label}
+            </MenuItem>
           ))}
         </TextField>
 
@@ -404,7 +462,11 @@ export default function NewNote() {
         />
 
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-          <Button variant="outlined" onClick={handleCleanRawNote} startIcon={<AutoFixHighIcon />}>
+          <Button
+            variant="outlined"
+            onClick={handleCleanRawNote}
+            startIcon={<AutoFixHighIcon />}
+          >
             Clean Dictation
           </Button>
 
