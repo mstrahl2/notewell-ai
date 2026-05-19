@@ -1,17 +1,22 @@
+// api/stripe-webhook.js
 import { buffer } from "micro";
-import * as admin from "firebase-admin";
-import { getFirestore } from "firebase-admin/firestore";
 import Stripe from "stripe";
+import { initializeApp, cert, getApps } from "firebase-admin/app";
+import {
+  getFirestore,
+  Timestamp,
+  FieldValue,
+} from "firebase-admin/firestore";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2023-10-16",
 });
 
-if (!admin.apps.length) {
+if (!getApps().length) {
   const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
+  initializeApp({
+    credential: cert(serviceAccount),
   });
 }
 
@@ -35,24 +40,32 @@ async function findUserBySubscriptionId(subscriptionId) {
   return snapshot.docs[0];
 }
 
+function getTierFromSubscription(subscription) {
+  const amount = subscription?.items?.data?.[0]?.price?.unit_amount;
+
+  if (amount === 1900) return "unlimited";
+  if (amount === 900) return "pro";
+
+  return "paid";
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).send("Method Not Allowed");
   }
 
-  let buf;
+  let rawBody;
 
   try {
-    buf = await buffer(req);
+    rawBody = await buffer(req);
   } catch (err) {
-    console.error("❌ Failed to read request buffer:", err);
+    console.error("Failed to read request buffer:", err);
     return res.status(400).send("Invalid request body");
   }
 
-  const sig = req.headers["stripe-signature"];
+  const signature = req.headers["stripe-signature"];
 
-  if (!sig) {
-    console.error("❌ Missing Stripe signature");
+  if (!signature) {
     return res.status(400).send("Missing Stripe signature header");
   }
 
@@ -60,16 +73,14 @@ export default async function handler(req, res) {
 
   try {
     event = stripe.webhooks.constructEvent(
-      buf,
-      sig,
+      rawBody,
+      signature,
       process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
-    console.error("❌ Webhook signature verification failed:", err.message);
+    console.error("Webhook signature verification failed:", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
-
-  console.log(`👉 Stripe event received: ${event.type}`);
 
   try {
     if (event.type === "checkout.session.completed") {
@@ -78,52 +89,50 @@ export default async function handler(req, res) {
       const {
         userId,
         priceId,
-        planName = "unknown",
+        planName = "paid",
         billingPeriod = "monthly",
         userEmail = "unknown",
       } = session.metadata || {};
 
-      if (!userId || !priceId) {
-        console.error("❗ Missing metadata: userId or priceId");
-        return res.status(400).send("Missing metadata");
-      }
-
-      if (!session.subscription) {
-        console.error("❌ Missing subscription ID");
-        return res.status(400).send("Invalid session");
+      if (!userId || !priceId || !session.subscription) {
+        return res.status(400).send("Missing required checkout metadata");
       }
 
       const subscription = await stripe.subscriptions.retrieve(
         session.subscription
       );
 
+      const cleanPlanName = planName.toLowerCase();
+      const tier =
+        cleanPlanName === "pro" || cleanPlanName === "unlimited"
+          ? cleanPlanName
+          : getTierFromSubscription(subscription);
+
       const subscriptionData = {
-        status: session.payment_status === "paid" ? "active" : "pending",
+        status: subscription.status || "active",
         priceId,
-        planName,
+        planName: tier,
         billingPeriod,
         userEmail,
         stripeCustomerId: session.customer,
         stripeSubscriptionId: session.subscription,
-        cancel_at_period_end: subscription.cancel_at_period_end,
-        current_period_end: admin.firestore.Timestamp.fromMillis(
-          subscription.current_period_end * 1000
-        ),
-        startedAt: admin.firestore.FieldValue.serverTimestamp(),
-        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        cancel_at_period_end: subscription.cancel_at_period_end || false,
+        current_period_end: subscription.current_period_end
+          ? Timestamp.fromMillis(subscription.current_period_end * 1000)
+          : null,
+        startedAt: FieldValue.serverTimestamp(),
+        lastUpdated: FieldValue.serverTimestamp(),
       };
 
-      const userRef = db.collection("users").doc(userId);
-
-      await userRef.set(
+      await db.collection("users").doc(userId).set(
         {
-          tier: planName.toLowerCase(),
+          tier,
           subscription: subscriptionData,
+          updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
       );
 
-      console.log("✅ Subscription stored in Firestore for user:", userId);
       return res.status(200).send("Subscription recorded");
     }
 
@@ -135,48 +144,42 @@ export default async function handler(req, res) {
       const userDoc = await findUserBySubscriptionId(subscription.id);
 
       if (!userDoc) {
-        console.warn("⚠️ No user found for subscription:", subscription.id);
         return res.status(200).send("No matching user");
       }
 
       const isDeleted = event.type === "customer.subscription.deleted";
+      const tier = isDeleted ? "free" : getTierFromSubscription(subscription);
 
-      await userDoc.ref.set(
-        {
-          tier: isDeleted ? "free" : undefined,
-          subscription: {
-            status: subscription.status,
-            stripeSubscriptionId: subscription.id,
-            stripeCustomerId: subscription.customer,
-            cancel_at_period_end: subscription.cancel_at_period_end,
-            current_period_end: subscription.current_period_end
-              ? admin.firestore.Timestamp.fromMillis(
-                  subscription.current_period_end * 1000
-                )
-              : null,
-            canceled_at: subscription.canceled_at
-              ? admin.firestore.Timestamp.fromMillis(
-                  subscription.canceled_at * 1000
-                )
-              : null,
-            ended_at: subscription.ended_at
-              ? admin.firestore.Timestamp.fromMillis(
-                  subscription.ended_at * 1000
-                )
-              : null,
-            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-          },
+      const updateData = {
+        tier,
+        subscription: {
+          status: subscription.status,
+          stripeSubscriptionId: subscription.id,
+          stripeCustomerId: subscription.customer,
+          planName: tier,
+          cancel_at_period_end: subscription.cancel_at_period_end || false,
+          current_period_end: subscription.current_period_end
+            ? Timestamp.fromMillis(subscription.current_period_end * 1000)
+            : null,
+          canceled_at: subscription.canceled_at
+            ? Timestamp.fromMillis(subscription.canceled_at * 1000)
+            : null,
+          ended_at: subscription.ended_at
+            ? Timestamp.fromMillis(subscription.ended_at * 1000)
+            : null,
+          lastUpdated: FieldValue.serverTimestamp(),
         },
-        { merge: true }
-      );
+        updatedAt: FieldValue.serverTimestamp(),
+      };
 
-      console.log("✅ Subscription updated from webhook:", subscription.id);
+      await userDoc.ref.set(updateData, { merge: true });
+
       return res.status(200).send("Subscription updated");
     }
 
     return res.status(200).send("Webhook received");
   } catch (err) {
-    console.error("❌ Webhook handler error:", err);
-    return res.status(500).send("Webhook handler failed");
+    console.error("Webhook handler error:", err);
+    return res.status(500).send(err.message || "Webhook handler failed");
   }
 }
