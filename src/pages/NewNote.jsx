@@ -10,8 +10,15 @@ import {
   Alert,
   Paper,
   Chip,
+  LinearProgress,
+  Divider,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import MicIcon from "@mui/icons-material/Mic";
+import StopIcon from "@mui/icons-material/Stop";
+import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import SaveIcon from "@mui/icons-material/Save";
 import { addNote as saveNote, getLastNote } from "../firebase/firestoreHelper";
 import generateSoapNote from "../utils/generateSoapNote";
 
@@ -62,11 +69,11 @@ function cleanDictationText(text) {
   let cleaned = text
     .replace(/\s+/g, " ")
     .replace(/\s+([,.!?])/g, "$1")
+    .replace(/\bi\b/g, "I")
+    .replace(/\bclient\b/g, "Client")
     .trim();
 
-  if (cleaned && !/[.!?]$/.test(cleaned)) {
-    cleaned += ".";
-  }
+  if (cleaned && !/[.!?]$/.test(cleaned)) cleaned += ".";
 
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }
@@ -79,12 +86,14 @@ export default function NewNote() {
   const [sessionDate, setSessionDate] = useState("");
   const [sessionLength, setSessionLength] = useState("50");
   const [riskLevel, setRiskLevel] = useState("none");
-
   const [noteType, setNoteType] = useState("standard");
+
   const [rawNote, setRawNote] = useState("");
   const [interimText, setInterimText] = useState("");
   const [formattedNote, setFormattedNote] = useState("");
   const [recording, setRecording] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [auditSafe, setAuditSafe] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -107,7 +116,6 @@ export default function NewNote() {
 
       if (!last) {
         setError("No previous session found.");
-        setSuccess("");
         return;
       }
 
@@ -126,7 +134,6 @@ export default function NewNote() {
     } catch (err) {
       console.error(err);
       setError("Failed to load last session.");
-      setSuccess("");
     }
   };
 
@@ -136,7 +143,7 @@ export default function NewNote() {
 
     if (!SpeechRecognition) {
       setError(
-        "Speech recognition is not supported in this browser. Try Chrome on desktop."
+        "Voice dictation is not supported in this browser. For best results, use Chrome."
       );
       return null;
     }
@@ -153,18 +160,12 @@ export default function NewNote() {
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
 
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript + " ";
-        } else {
-          interimTranscript += transcript;
-        }
+        if (event.results[i].isFinal) finalTranscript += transcript + " ";
+        else interimTranscript += transcript;
       }
 
       if (finalTranscript.trim()) {
-        setRawNote((prev) => {
-          const combined = `${prev} ${finalTranscript}`.trim();
-          return cleanDictationText(combined);
-        });
+        setRawNote((prev) => cleanDictationText(`${prev} ${finalTranscript}`));
       }
 
       setInterimText(interimTranscript);
@@ -172,8 +173,8 @@ export default function NewNote() {
 
     recognition.onerror = (event) => {
       console.error("Speech recognition error:", event);
-      setError("Voice dictation had an issue. Stop and start recording again.");
       setRecording(false);
+      setError("Voice dictation stopped. Try starting it again.");
     };
 
     recognition.onend = () => {
@@ -205,7 +206,7 @@ export default function NewNote() {
       setRecording(true);
     } catch (err) {
       console.error(err);
-      setError("Recording is already starting. Try again in a second.");
+      setError("Recording is already starting. Try again in a moment.");
     }
   };
 
@@ -223,62 +224,65 @@ export default function NewNote() {
     setSuccess("");
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     const cleanedRaw = cleanDictationText(rawNote);
 
     if (!cleanedRaw.trim()) {
       setError("Enter or speak a note first.");
-      setSuccess("");
       return;
     }
 
-    setRawNote(cleanedRaw);
-    setError("");
-    setSuccess("");
+    try {
+      setGenerating(true);
+      setRawNote(cleanedRaw);
+      setError("");
+      setSuccess("");
 
-    const metadataText =
-      "Client: " +
-      (clientName || "Not listed") +
-      "\nSession Date: " +
-      (sessionDate || "Not listed") +
-      "\nSession Length: " +
-      (sessionLength || "Not listed") +
-      " minutes\nRisk Level: " +
-      riskLevel +
-      "\n\nSession Summary:\n" +
-      cleanedRaw;
+      const metadataText =
+        "Client: " +
+        (clientName || "Not listed") +
+        "\nSession Date: " +
+        (sessionDate || "Not listed") +
+        "\nSession Length: " +
+        (sessionLength || "Not listed") +
+        " minutes\nRisk Level: " +
+        riskLevel +
+        "\n\nSession Summary:\n" +
+        cleanedRaw;
 
-    const formatted = generateSoapNote(metadataText, noteType, auditSafe);
-    setFormattedNote(formatted);
-    setSuccess("SOAP note generated.");
+      const formatted = generateSoapNote(metadataText, noteType, auditSafe);
+      setFormattedNote(formatted);
+      setSuccess("SOAP note generated.");
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handleCopyFormatted = async () => {
     if (!formattedNote.trim()) {
       setError("Generate a SOAP note before copying.");
-      setSuccess("");
       return;
     }
 
     try {
       await navigator.clipboard.writeText(formattedNote);
-      setError("");
       setSuccess("SOAP note copied.");
+      setError("");
     } catch (err) {
       console.error(err);
       setError("Unable to copy note.");
-      setSuccess("");
     }
   };
 
   const handleSave = async () => {
     if (!formattedNote.trim()) {
       setError("Generate the SOAP note before saving.");
-      setSuccess("");
       return;
     }
 
     try {
+      setSaving(true);
+
       await saveNote({
         title,
         noteType,
@@ -295,28 +299,46 @@ export default function NewNote() {
     } catch (err) {
       console.error(err);
       setError(err.message || "Failed to save note.");
-      setSuccess("");
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box maxWidth={900} mx="auto" sx={{ p: { xs: 1, sm: 3 } }}>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
         <Typography variant="h4">New Note</Typography>
-        {recording && <Chip label="Recording" color="error" size="small" />}
+        {recording && <Chip label="Listening" color="error" size="small" />}
       </Stack>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+      {recording && <LinearProgress color="error" sx={{ mb: 2 }} />}
 
-      {success && (
-        <Alert severity="success" sx={{ mb: 2 }}>
-          {success}
-        </Alert>
-      )}
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Typography variant="h6">Voice Dictation</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Speak naturally. NoteWell AI will clean the dictation and format it into a SOAP note.
+        </Typography>
+
+        <Button
+          fullWidth
+          size="large"
+          variant={recording ? "contained" : "outlined"}
+          color={recording ? "error" : "primary"}
+          startIcon={recording ? <StopIcon /> : <MicIcon />}
+          onClick={handleRecord}
+        >
+          {recording ? "Stop Dictation" : "Start Dictation"}
+        </Button>
+
+        {interimText && (
+          <Alert severity="info" sx={{ mt: 2 }}>
+            Hearing: {interimText}
+          </Alert>
+        )}
+      </Paper>
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="h6" gutterBottom>
@@ -341,19 +363,8 @@ export default function NewNote() {
       </Paper>
 
       <Stack spacing={2}>
-        <TextField
-          label="Note Title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          fullWidth
-        />
-
-        <TextField
-          label="Client Name"
-          value={clientName}
-          onChange={(e) => setClientName(e.target.value)}
-          fullWidth
-        />
+        <TextField label="Note Title" value={title} onChange={(e) => setTitle(e.target.value)} fullWidth />
+        <TextField label="Client Name" value={clientName} onChange={(e) => setClientName(e.target.value)} fullWidth />
 
         <TextField
           label="Session Date"
@@ -364,90 +375,60 @@ export default function NewNote() {
           InputLabelProps={{ shrink: true }}
         />
 
-        <TextField
-          select
-          label="Session Length"
-          value={sessionLength}
-          onChange={(e) => setSessionLength(e.target.value)}
-          fullWidth
-        >
-          <MenuItem value="15">15 minutes</MenuItem>
-          <MenuItem value="30">30 minutes</MenuItem>
-          <MenuItem value="45">45 minutes</MenuItem>
-          <MenuItem value="50">50 minutes</MenuItem>
-          <MenuItem value="53">53 minutes</MenuItem>
-          <MenuItem value="60">60 minutes</MenuItem>
-          <MenuItem value="90">90 minutes</MenuItem>
+        <TextField select label="Session Length" value={sessionLength} onChange={(e) => setSessionLength(e.target.value)} fullWidth>
+          {["15", "30", "45", "50", "53", "60", "90"].map((v) => (
+            <MenuItem key={v} value={v}>{v} minutes</MenuItem>
+          ))}
         </TextField>
 
-        <TextField
-          select
-          label="Risk Level"
-          value={riskLevel}
-          onChange={(e) => setRiskLevel(e.target.value)}
-          fullWidth
-        >
+        <TextField select label="Risk Level" value={riskLevel} onChange={(e) => setRiskLevel(e.target.value)} fullWidth>
           <MenuItem value="none">None / Not Assessed</MenuItem>
           <MenuItem value="low">Low Risk</MenuItem>
           <MenuItem value="moderate">Moderate Risk</MenuItem>
           <MenuItem value="high">High Risk</MenuItem>
         </TextField>
 
-        <TextField
-          select
-          label="Note Type"
-          value={noteType}
-          onChange={(e) => setNoteType(e.target.value)}
-          fullWidth
-        >
+        <TextField select label="Note Type" value={noteType} onChange={(e) => setNoteType(e.target.value)} fullWidth>
           {noteTypes.map((note) => (
-            <MenuItem key={note.value} value={note.value}>
-              {note.label}
-            </MenuItem>
+            <MenuItem key={note.value} value={note.value}>{note.label}</MenuItem>
           ))}
         </TextField>
-
-        <Button
-          variant={recording ? "contained" : "outlined"}
-          color={recording ? "error" : "primary"}
-          onClick={handleRecord}
-        >
-          {recording ? "Stop Recording" : "Start Voice Dictation"}
-        </Button>
-
-        {interimText && <Alert severity="info">Hearing: {interimText}</Alert>}
 
         <TextField
           label="Raw Note / Dictation"
           multiline
-          minRows={7}
+          minRows={8}
           value={rawNote}
           onChange={(e) => setRawNote(e.target.value)}
           fullWidth
         />
 
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-          <Button variant="outlined" onClick={handleCleanRawNote}>
+          <Button variant="outlined" onClick={handleCleanRawNote} startIcon={<AutoFixHighIcon />}>
             Clean Dictation
           </Button>
 
-          <Button
-            variant="outlined"
-            color="error"
-            onClick={handleClearDictation}
-          >
-            Clear Dictation
+          <Button variant="outlined" color="error" onClick={handleClearDictation}>
+            Clear
           </Button>
         </Stack>
 
-        <Button variant="contained" onClick={handleGenerate}>
-          Generate SOAP Note
+        <Divider />
+
+        <Button
+          variant="contained"
+          size="large"
+          onClick={handleGenerate}
+          disabled={generating}
+          startIcon={<AutoFixHighIcon />}
+        >
+          {generating ? "Generating..." : "Generate SOAP Note"}
         </Button>
 
         <TextField
           label="Formatted SOAP Note"
           multiline
-          minRows={8}
+          minRows={9}
           value={formattedNote}
           onChange={(e) => setFormattedNote(e.target.value)}
           fullWidth
@@ -458,12 +439,19 @@ export default function NewNote() {
             variant="outlined"
             onClick={handleCopyFormatted}
             disabled={!formattedNote.trim()}
+            startIcon={<ContentCopyIcon />}
           >
             Copy SOAP Note
           </Button>
 
-          <Button variant="contained" color="success" onClick={handleSave}>
-            Save Note
+          <Button
+            variant="contained"
+            color="success"
+            onClick={handleSave}
+            disabled={saving}
+            startIcon={<SaveIcon />}
+          >
+            {saving ? "Saving..." : "Save Note"}
           </Button>
         </Stack>
       </Stack>
