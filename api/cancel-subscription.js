@@ -1,18 +1,26 @@
+// api/cancel-subscription.js
 import Stripe from "stripe";
-import * as admin from "firebase-admin";
-import { sendCancellationEmail } from "../src/utils/sendCancellationEmail";
+import { initializeApp, cert, getApps } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import {
+  getFirestore,
+  Timestamp,
+  FieldValue,
+} from "firebase-admin/firestore";
 
-if (!admin.apps.length) {
+if (!getApps().length) {
   const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
+  initializeApp({
+    credential: cert(serviceAccount),
   });
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2023-10-16",
 });
+
+const db = getFirestore();
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -25,13 +33,11 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const idToken = authHeader.split("Bearer ")[1];
-
   try {
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const idToken = authHeader.split("Bearer ")[1];
+    const decodedToken = await getAuth().verifyIdToken(idToken);
     const uid = decodedToken.uid;
 
-    const db = admin.firestore();
     const userRef = db.collection("users").doc(uid);
     const userSnap = await userRef.get();
 
@@ -53,49 +59,34 @@ export default async function handler(req, res) {
       }
     );
 
-    const {
-      status,
-      cancel_at_period_end,
-      current_period_end,
-      canceled_at,
-    } = updatedSubscription;
-
     await userRef.set(
       {
         subscription: {
           ...subscription,
-          status,
-          cancel_at_period_end,
-          current_period_end: admin.firestore.Timestamp.fromMillis(
-            current_period_end * 1000
-          ),
-          canceled_at: canceled_at
-            ? admin.firestore.Timestamp.fromMillis(canceled_at * 1000)
+          status: updatedSubscription.status,
+          cancel_at_period_end:
+            updatedSubscription.cancel_at_period_end || false,
+          current_period_end: updatedSubscription.current_period_end
+            ? Timestamp.fromMillis(updatedSubscription.current_period_end * 1000)
             : null,
-          cancelRequestedAt: admin.firestore.FieldValue.serverTimestamp(),
-          lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+          canceled_at: updatedSubscription.canceled_at
+            ? Timestamp.fromMillis(updatedSubscription.canceled_at * 1000)
+            : null,
+          cancelRequestedAt: FieldValue.serverTimestamp(),
+          lastUpdated: FieldValue.serverTimestamp(),
         },
+        updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true }
     );
-
-    if (userData.email) {
-      try {
-        const emailSent = await sendCancellationEmail(userData.email);
-
-        if (!emailSent) {
-          console.warn("⚠️ Cancellation email failed to send.");
-        }
-      } catch (emailErr) {
-        console.warn("⚠️ Cancellation email error:", emailErr);
-      }
-    }
 
     return res.status(200).json({
       message: "Subscription cancellation scheduled for period end.",
     });
   } catch (err) {
-    console.error("❌ Cancel Subscription Error:", err);
-    return res.status(500).json({ error: "Internal Server Error" });
+    console.error("Cancel Subscription Error:", err);
+    return res.status(500).json({
+      error: err.message || "Internal Server Error",
+    });
   }
 }
