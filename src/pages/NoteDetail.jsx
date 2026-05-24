@@ -13,6 +13,18 @@ import {
   Divider,
   Chip,
 } from "@mui/material";
+import {
+  PictureAsPdf,
+  ContentCopy,
+  Edit,
+  Share,
+  ArrowBack,
+  Description,
+  Print,
+} from "@mui/icons-material";
+
+import jsPDF from "jspdf";
+
 import { getNoteById } from "../firebase/firestoreHelper";
 
 const noteTypeLabels = {
@@ -41,6 +53,7 @@ export default function NoteDetail() {
   const [note, setNote] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
   const [copied, setCopied] = useState(false);
   const [copiedClean, setCopiedClean] = useState(false);
   const [shareError, setShareError] = useState("");
@@ -88,7 +101,7 @@ export default function NoteDetail() {
     }
   };
 
-  const handleExport = () => {
+  const handleExportTXT = () => {
     if (!note) return;
 
     const cleanText = getCleanNoteText(note.formattedNote || "");
@@ -98,13 +111,79 @@ export default function NoteDetail() {
     });
 
     const url = URL.createObjectURL(blob);
+
     const link = document.createElement("a");
 
     link.href = url;
     link.download = `${note.title || "soap-note"}.txt`;
+
     link.click();
 
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportPDF = () => {
+    if (!note) return;
+
+    const doc = new jsPDF();
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    let y = 20;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+
+    doc.text("NoteWell AI", pageWidth / 2, y, {
+      align: "center",
+    });
+
+    y += 12;
+
+    doc.setFontSize(16);
+
+    doc.text(note.title || "SOAP Note", 20, y);
+
+    y += 10;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+
+    if (note.clientName) {
+      doc.text(`Client: ${note.clientName}`, 20, y);
+      y += 7;
+    }
+
+    if (note.sessionDate) {
+      doc.text(`Session Date: ${note.sessionDate}`, 20, y);
+      y += 7;
+    }
+
+    if (note.sessionLength) {
+      doc.text(`Session Length: ${note.sessionLength} minutes`, 20, y);
+      y += 7;
+    }
+
+    y += 5;
+
+    doc.setFont("helvetica", "bold");
+    doc.text("SOAP Note", 20, y);
+
+    y += 10;
+
+    doc.setFont("helvetica", "normal");
+
+    const cleanText = getCleanNoteText(note.formattedNote || "");
+
+    const splitText = doc.splitTextToSize(cleanText, 170);
+
+    doc.text(splitText, 20, y);
+
+    doc.save(`${note.title || "soap-note"}.pdf`);
+  };
+
+  const handlePrint = () => {
+    window.print();
   };
 
   const handleShare = async () => {
@@ -119,7 +198,7 @@ export default function NoteDetail() {
           text: cleanText,
         });
       } catch (error) {
-        console.error("Error sharing:", error);
+        console.error(error);
         setShareError("Sharing was cancelled or failed.");
       }
     } else {
@@ -139,6 +218,7 @@ export default function NoteDetail() {
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="error">{error}</Alert>
+
         <Button onClick={() => navigate("/my-notes")} sx={{ mt: 2 }}>
           Back to My Notes
         </Button>
@@ -149,11 +229,17 @@ export default function NoteDetail() {
   return (
     <Box sx={{ p: 3 }}>
       <Stack spacing={1} sx={{ mb: 2 }}>
-        <Typography variant="h4">{note.title || "Untitled Note"}</Typography>
+        <Typography variant="h4">
+          {note.title || "Untitled Note"}
+        </Typography>
 
         <Stack direction="row" spacing={1} flexWrap="wrap">
           <Chip
-            label={noteTypeLabels[note.noteType] || note.noteType || "N/A"}
+            label={
+              noteTypeLabels[note.noteType] ||
+              note.noteType ||
+              "N/A"
+            }
             size="small"
           />
 
@@ -167,20 +253,33 @@ export default function NoteDetail() {
           )}
 
           {note.clientName && (
-            <Chip label={`Client: ${note.clientName}`} size="small" />
+            <Chip
+              label={`Client: ${note.clientName}`}
+              size="small"
+            />
           )}
 
           {note.sessionDate && (
-            <Chip label={`Date: ${note.sessionDate}`} size="small" />
+            <Chip
+              label={`Date: ${note.sessionDate}`}
+              size="small"
+            />
           )}
 
           {note.sessionLength && (
-            <Chip label={`${note.sessionLength} min`} size="small" />
+            <Chip
+              label={`${note.sessionLength} min`}
+              size="small"
+            />
           )}
 
-          {note.riskLevel && note.riskLevel !== "none" && (
-            <Chip label={`Risk: ${note.riskLevel}`} size="small" />
-          )}
+          {note.riskLevel &&
+            note.riskLevel !== "none" && (
+              <Chip
+                label={`Risk: ${note.riskLevel}`}
+                size="small"
+              />
+            )}
         </Stack>
       </Stack>
 
@@ -190,6 +289,7 @@ export default function NoteDetail() {
         <Typography variant="subtitle2" gutterBottom>
           Raw Note
         </Typography>
+
         <Typography sx={{ whiteSpace: "pre-wrap" }}>
           {note.rawNote || "No raw note available."}
         </Typography>
@@ -199,33 +299,77 @@ export default function NoteDetail() {
         <Typography variant="subtitle2" gutterBottom>
           Formatted SOAP Note
         </Typography>
+
         <Typography sx={{ whiteSpace: "pre-wrap" }}>
           {note.formattedNote || "No formatted note available."}
         </Typography>
       </Paper>
 
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-        <Button variant="contained" onClick={() => navigate(`/edit-note/${id}`)}>
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={2}
+        flexWrap="wrap"
+      >
+        <Button
+          variant="contained"
+          startIcon={<Edit />}
+          onClick={() => navigate(`/edit-note/${id}`)}
+        >
           Edit
         </Button>
 
-        <Button variant="outlined" onClick={handleCopy}>
+        <Button
+          variant="outlined"
+          startIcon={<ContentCopy />}
+          onClick={handleCopy}
+        >
           Copy
         </Button>
 
-        <Button variant="outlined" onClick={handleCopyClean}>
-          Copy Clean Version
+        <Button
+          variant="outlined"
+          startIcon={<Description />}
+          onClick={handleCopyClean}
+        >
+          Copy Clean
         </Button>
 
-        <Button variant="outlined" onClick={handleExport}>
-          Export Clean TXT
+        <Button
+          variant="outlined"
+          startIcon={<PictureAsPdf />}
+          onClick={handleExportPDF}
+        >
+          Export PDF
         </Button>
 
-        <Button variant="outlined" onClick={handleShare}>
-          Share Clean
+        <Button
+          variant="outlined"
+          onClick={handleExportTXT}
+        >
+          Export TXT
         </Button>
 
-        <Button variant="text" onClick={() => navigate("/my-notes")}>
+        <Button
+          variant="outlined"
+          startIcon={<Print />}
+          onClick={handlePrint}
+        >
+          Print
+        </Button>
+
+        <Button
+          variant="outlined"
+          startIcon={<Share />}
+          onClick={handleShare}
+        >
+          Share
+        </Button>
+
+        <Button
+          variant="text"
+          startIcon={<ArrowBack />}
+          onClick={() => navigate("/my-notes")}
+        >
           Back
         </Button>
       </Stack>
