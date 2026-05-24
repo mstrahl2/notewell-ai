@@ -21,31 +21,32 @@ export default function PublicLayout() {
     >
       <Container maxWidth="sm" sx={{ mt: { xs: 5, sm: 8 }, flexGrow: 1 }}>
         {/* Logo + Branding */}
-        <Box textAlign="center" mb={4}>
-          <Box
-            component="img"
-            src="/branding/logo-horizontal.png"
-            alt="NoteWell AI"
-            sx={{
-              height: { xs: 52, sm: 64 },
-              width: "auto",
-              objectFit: "contain",
-              mb: 2,
-            }}
-          />
+        <Box textAlign="center" mb={5}>
+  <Typography
+    sx={{
+      fontSize: { xs: "2.4rem", sm: "3rem" },
+      fontWeight: 700,
+      letterSpacing: "-0.04em",
+      color: "#2F3437",
+      lineHeight: 1,
+      mb: 1.5,
+    }}
+  >
+    Note<span style={{ color: "#6CAAA5" }}>Well</span> AI
+  </Typography>
 
-          <Typography
-            color="text.secondary"
-            sx={{
-              fontSize: "1rem",
-              maxWidth: 420,
-              mx: "auto",
-              lineHeight: 1.6,
-            }}
-          >
-            AI-powered clinical documentation for mental health professionals.
-          </Typography>
-        </Box>
+  <Typography
+    color="text.secondary"
+    sx={{
+      fontSize: "1rem",
+      maxWidth: 420,
+      mx: "auto",
+      lineHeight: 1.7,
+    }}
+  >
+    AI-powered clinical documentation for mental health professionals.
+  </Typography>
+</Box>
 
         {/* Main Auth Card */}
         <Card
