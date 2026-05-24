@@ -11,6 +11,7 @@ import {
   FormControlLabel,
   Alert,
   Stack,
+  Divider,
 } from "@mui/material";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../firebase/firebaseConfig";
@@ -32,7 +33,7 @@ export default function Signup() {
     setError("");
 
     if (!agreeToTerms) {
-      setError("You must read and agree before creating an account.");
+      setError("Please review and accept the required terms before continuing.");
       return;
     }
 
@@ -41,7 +42,7 @@ export default function Signup() {
 
       const userCredential = await createUserWithEmailAndPassword(
         auth,
-        email,
+        email.trim(),
         password
       );
 
@@ -60,7 +61,8 @@ export default function Signup() {
 
       navigate("/profile-update");
     } catch (err) {
-      setError(err.message);
+      console.error("Signup error:", err);
+      setError(err.message || "Failed to create account.");
     } finally {
       setSaving(false);
     }
@@ -68,12 +70,13 @@ export default function Signup() {
 
   return (
     <Box>
-      <Typography variant="h5" gutterBottom>
-        Create your NoteWell AI account
+      <Typography variant="h5" fontWeight={700} gutterBottom>
+        Create your account
       </Typography>
 
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Mental health documentation, simplified.
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        Start turning typed or dictated session notes into organized clinical
+        documentation.
       </Typography>
 
       {error && (
@@ -82,7 +85,7 @@ export default function Signup() {
         </Alert>
       )}
 
-      <form onSubmit={handleSignup}>
+      <Box component="form" onSubmit={handleSignup} noValidate>
         <Stack spacing={2}>
           <TextField
             label="Email"
@@ -91,6 +94,7 @@ export default function Signup() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
           />
 
           <TextField
@@ -100,33 +104,40 @@ export default function Signup() {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+            helperText="Use a secure password you do not use elsewhere."
           />
 
           <Box
             sx={{
-              border: "1px solid #d1d5db",
-              borderRadius: 1,
+              border: "1px solid #E5E7EB",
+              borderRadius: 2,
               p: 2,
-              maxHeight: 170,
+              maxHeight: 190,
               overflowY: "auto",
-              bgcolor: "#fafafa",
+              bgcolor: "#FAFAFA",
             }}
           >
-            <Typography variant="subtitle2" gutterBottom>
+            <Typography variant="subtitle2" fontWeight={700} gutterBottom>
               Important use notice
             </Typography>
 
             <Typography variant="body2" paragraph>
-              NoteWell AI provides assistive documentation tools for mental
-              health professionals. Generated content is a draft and does not
-              replace clinical judgment, supervision, legal guidance, payer
-              requirements, employer policies, or professional standards.
+              NoteWell AI provides assistive clinical documentation tools for
+              mental health professionals. Generated content is a draft and must
+              be reviewed, edited, and approved by the clinician before use.
             </Typography>
 
             <Typography variant="body2" paragraph>
-              You are responsible for reviewing, editing, and approving all
-              notes before use. Do not rely on generated text as medical,
-              clinical, legal, billing, or compliance advice.
+              NoteWell AI does not replace clinical judgment, supervision,
+              professional standards, payer requirements, employer policies, or
+              legal/compliance guidance.
+            </Typography>
+
+            <Typography variant="body2" paragraph>
+              Do not enter unnecessary sensitive information. You are responsible
+              for ensuring your use of this tool complies with applicable privacy,
+              documentation, and professional obligations.
             </Typography>
 
             <Typography variant="body2">
@@ -136,13 +147,31 @@ export default function Signup() {
           </Box>
 
           <FormControlLabel
+            sx={{ alignItems: "flex-start" }}
             control={
               <Checkbox
                 checked={agreeToTerms}
                 onChange={(e) => setAgreeToTerms(e.target.checked)}
+                sx={{ mt: -0.5 }}
               />
             }
-            label="I have read and agree to the terms, privacy policy, and disclaimer."
+            label={
+              <Typography variant="body2">
+                I have read and agree to the{" "}
+                <Link component={RouterLink} to="/terms-of-service">
+                  Terms
+                </Link>
+                ,{" "}
+                <Link component={RouterLink} to="/privacy-policy">
+                  Privacy Policy
+                </Link>
+                , and{" "}
+                <Link component={RouterLink} to="/disclaimer">
+                  Disclaimer
+                </Link>
+                .
+              </Typography>
+            }
           />
 
           <Button
@@ -150,36 +179,25 @@ export default function Signup() {
             fullWidth
             variant="contained"
             disabled={!agreeToTerms || saving}
+            sx={{
+              py: 1.25,
+              textTransform: "none",
+              fontWeight: 700,
+            }}
           >
-            {saving ? "Creating Account..." : "Sign Up"}
+            {saving ? "Creating Account..." : "Create Account"}
           </Button>
         </Stack>
-      </form>
-
-      <Box mt={2}>
-        <Typography variant="body2">
-          Already have an account?{" "}
-          <Link component={RouterLink} to="/login">
-            Login
-          </Link>
-        </Typography>
-
-        <Typography variant="body2" sx={{ mt: 1 }}>
-          Review{" "}
-          <Link component={RouterLink} to="/terms-of-service">
-            Terms
-          </Link>
-          ,{" "}
-          <Link component={RouterLink} to="/privacy-policy">
-            Privacy
-          </Link>
-          , and{" "}
-          <Link component={RouterLink} to="/disclaimer">
-            Disclaimer
-          </Link>
-          .
-        </Typography>
       </Box>
+
+      <Divider sx={{ my: 3 }} />
+
+      <Typography variant="body2" textAlign="center">
+        Already have an account?{" "}
+        <Link component={RouterLink} to="/login" fontWeight={700}>
+          Log in
+        </Link>
+      </Typography>
     </Box>
   );
 }
