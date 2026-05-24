@@ -2,17 +2,27 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/icons/icon-192x192.png" />
+
+    <!-- NoteWell AI Branding -->
+    <link rel="icon" type="image/x-icon" href="/branding/favicon.ico" />
+    <link rel="apple-touch-icon" href="/branding/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#1976d2" />
+
+    <meta name="theme-color" content="#8FC7C2" />
+    <meta name="background-color" content="#F6F4EE" />
 
     <!-- Apple PWA support -->
-    <link rel="apple-touch-icon" href="/icons/icon-180x180.png" />
+    <meta name="apple-mobile-web-app-title" content="NoteWell AI" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="NoteWell AI helps mental health professionals turn typed or dictated session notes into professional SOAP documentation."
+    />
+
     <title>NoteWell AI</title>
 
     <style>
@@ -20,66 +30,92 @@
         position: fixed;
         bottom: 20px;
         left: 20px;
-        background: #1976d2;
-        color: white;
-        padding: 10px 16px;
-        border-radius: 6px;
-        font-size: 16px;
+        background: #2f3437;
+        color: #ffffff;
+        padding: 12px 16px;
+        border-radius: 12px;
+        font-size: 15px;
         z-index: 9999;
         cursor: pointer;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
         display: none;
-        max-width: 90vw;
+        max-width: calc(100vw - 40px);
         user-select: none;
+        line-height: 1.4;
+      }
+
+      #installBanner:hover {
+        background: #1f2426;
       }
     </style>
   </head>
+
   <body>
     <div id="root"></div>
 
-    <div id="installBanner">📲 Install NoteWell AI App</div>
+    <div id="installBanner">Install NoteWell AI</div>
 
     <script type="module" src="/src/main.jsx"></script>
 
     <script>
       let deferredPrompt;
 
-      // Detect if iOS device
-      const isIos = () => /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
-      // Detect if app is already installed in standalone mode
-      const isInStandaloneMode = () => ('standalone' in window.navigator) && window.navigator.standalone;
+      const isIos = () =>
+        /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+
+      const isInStandaloneMode = () =>
+        "standalone" in window.navigator && window.navigator.standalone;
+
+      const showBanner = (text) => {
+        const banner = document.getElementById("installBanner");
+        if (!banner) return;
+
+        banner.textContent = text;
+        banner.style.display = "block";
+      };
+
+      const hideBanner = () => {
+        const banner = document.getElementById("installBanner");
+        if (!banner) return;
+
+        banner.style.display = "none";
+      };
 
       if (isIos() && !isInStandaloneMode()) {
-        // Show manual install instructions for iOS
-        const banner = document.getElementById('installBanner');
-        banner.style.display = 'block';
-        banner.textContent = "To install this app, tap the Share icon and select 'Add to Home Screen'";
-        banner.onclick = () => {
-          banner.style.display = 'none';
-        };
+        showBanner("Install NoteWell AI: tap Share, then Add to Home Screen.");
+
+        const banner = document.getElementById("installBanner");
+        if (banner) {
+          banner.onclick = hideBanner;
+        }
       } else {
-        // Listen for beforeinstallprompt event on supported browsers (Chrome, Edge)
-        window.addEventListener('beforeinstallprompt', (e) => {
+        window.addEventListener("beforeinstallprompt", (e) => {
           e.preventDefault();
           deferredPrompt = e;
-          const banner = document.getElementById('installBanner');
-          banner.style.display = 'block';
 
-          banner.addEventListener('click', async () => {
-            banner.style.display = 'none';
-            if (deferredPrompt) {
-              deferredPrompt.prompt();
-              const { outcome } = await deferredPrompt.userChoice;
-              console.log('User response to the install prompt:', outcome);
-              deferredPrompt = null;
-            }
-          });
+          showBanner("Install NoteWell AI");
+
+          const banner = document.getElementById("installBanner");
+
+          if (banner) {
+            banner.onclick = async () => {
+              hideBanner();
+
+              if (deferredPrompt) {
+                deferredPrompt.prompt();
+
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log("Install prompt response:", outcome);
+
+                deferredPrompt = null;
+              }
+            };
+          }
         });
 
-        // Hide banner if app is installed
-        window.addEventListener('appinstalled', () => {
-          console.log('App installed');
-          document.getElementById('installBanner').style.display = 'none';
+        window.addEventListener("appinstalled", () => {
+          console.log("NoteWell AI installed");
+          hideBanner();
         });
       }
     </script>

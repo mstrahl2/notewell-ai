@@ -1,27 +1,25 @@
 {
-    "short_name": "NoteWell AI",
-    "name": "NoteWell AI",
-    "description": "Generate professional SOAP notes easily from session notes.",
-    "start_url": "/",
-    "display": "standalone",
-    "background_color": "#ffffff",
-    "theme_color": "#1976d2",
-    "icons": [
-      {
-        "src": "icons/icon-72x72.png",
-        "sizes": "72x72",
-        "type": "image/png"
-      },
-      {
-        "src": "icons/icon-192x192.png",
-        "sizes": "192x192",
-        "type": "image/png"
-      },
-      {
-        "src": "icons/icon-512x512.png",
-        "sizes": "512x512",
-        "type": "image/png"
-      }
-    ]
-  }
-  
+  "short_name": "NoteWell",
+  "name": "NoteWell AI",
+  "description": "AI-powered clinical documentation for mental health professionals.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F6F4EE",
+  "theme_color": "#8FC7C2",
+  "icons": [
+    {
+      "src": "/branding/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/branding/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
