@@ -140,48 +140,73 @@ export default function NewNote() {
   const setupRecognition = () => {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
-
+  
     if (!SpeechRecognition) {
       setError(
-        "Voice dictation is not supported in this browser. For best results, use Chrome."
+        "Voice dictation is limited on iPhone browsers. You can still use the iPhone keyboard microphone for dictation."
       );
       return null;
     }
-
+  
     const recognition = new SpeechRecognition();
+  
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "en-US";
-
+    recognition.maxAlternatives = 1;
+  
+    recognition.onstart = () => {
+      setRecording(true);
+      setError("");
+    };
+  
     recognition.onresult = (event) => {
       let finalTranscript = "";
       let interimTranscript = "";
-
+  
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
-
-        if (event.results[i].isFinal) finalTranscript += transcript + " ";
-        else interimTranscript += transcript;
+  
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + " ";
+        } else {
+          interimTranscript += transcript;
+        }
       }
-
+  
       if (finalTranscript.trim()) {
-        setRawNote((prev) => cleanDictationText(`${prev} ${finalTranscript}`));
+        setRawNote((prev) =>
+          cleanDictationText(`${prev} ${finalTranscript}`)
+        );
       }
-
+  
       setInterimText(interimTranscript);
     };
-
+  
     recognition.onerror = (event) => {
       console.error("Speech recognition error:", event);
+  
+      // Ignore harmless mobile/browser interruptions
+      if (
+        event.error === "aborted" ||
+        event.error === "no-speech" ||
+        event.error === "audio-capture"
+      ) {
+        return;
+      }
+  
       setRecording(false);
-      setError("Voice dictation stopped. Try starting it again.");
+  
+      setError(
+        "Voice dictation was interrupted. On iPhone, using the keyboard microphone is often more reliable."
+      );
     };
-
+  
     recognition.onend = () => {
       setRecording(false);
       setInterimText("");
     };
-
+  
     return recognition;
   };
 
