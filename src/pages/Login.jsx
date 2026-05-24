@@ -32,9 +32,12 @@ export default function Login() {
 
     try {
       setLoading(true);
-      await signInWithEmailAndPassword(auth, email, password);
+
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+
       navigate("/dashboard");
     } catch (err) {
+      console.error("Login error:", err);
       setError(err.message || "Failed to log in.");
     } finally {
       setLoading(false);
@@ -46,10 +49,14 @@ export default function Login() {
 
     try {
       setLoading(true);
+
       const provider = new GoogleAuthProvider();
+
       await signInWithPopup(auth, provider);
+
       navigate("/dashboard");
     } catch (err) {
+      console.error("Google login error:", err);
       setError(err.message || "Failed to sign in with Google.");
     } finally {
       setLoading(false);
@@ -58,12 +65,12 @@ export default function Login() {
 
   return (
     <Box>
-      <Typography variant="h5" gutterBottom>
+      <Typography variant="h5" fontWeight={700} gutterBottom>
         Welcome back
       </Typography>
 
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Log in to continue drafting mental health documentation with NoteWell AI.
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        Log in to create, review, and manage your clinical documentation.
       </Typography>
 
       {error && (
@@ -81,6 +88,7 @@ export default function Login() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            autoComplete="email"
           />
 
           <TextField
@@ -90,30 +98,60 @@ export default function Login() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            autoComplete="current-password"
           />
 
-          <Button type="submit" variant="contained" fullWidth disabled={loading}>
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth
+            disabled={loading}
+            sx={{
+              py: 1.25,
+              textTransform: "none",
+              fontWeight: 700,
+            }}
+          >
             {loading ? "Logging in..." : "Log In"}
           </Button>
         </Stack>
       </Box>
 
-      <Divider sx={{ my: 3 }}>OR</Divider>
+      <Divider sx={{ my: 3 }}>or</Divider>
 
       <Button
         variant="outlined"
         fullWidth
         onClick={handleGoogleSignIn}
         disabled={loading}
+        sx={{
+          py: 1.15,
+          textTransform: "none",
+          fontWeight: 600,
+        }}
       >
-        Sign in with Google
+        Continue with Google
       </Button>
 
-      <Typography variant="body2" sx={{ mt: 2, textAlign: "center" }}>
+      <Typography variant="body2" sx={{ mt: 3, textAlign: "center" }}>
         Don&apos;t have an account?{" "}
-        <Link component={RouterLink} to="/signup">
-          Sign Up
+        <Link component={RouterLink} to="/signup" fontWeight={700}>
+          Create one
         </Link>
+      </Typography>
+
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{
+          display: "block",
+          mt: 2,
+          textAlign: "center",
+          lineHeight: 1.6,
+        }}
+      >
+        Generated notes are assistive drafts and require clinician review before
+        use.
       </Typography>
     </Box>
   );
