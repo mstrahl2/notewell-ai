@@ -1,3 +1,4 @@
+// src/components/Layout.jsx
 import React, { useEffect, useState } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { auth } from "../firebase/firebaseConfig";
@@ -5,7 +6,6 @@ import { signOut } from "firebase/auth";
 import {
   Box,
   Button,
-  Typography,
   AppBar,
   Toolbar,
   Link,
@@ -21,6 +21,21 @@ import { getProfile } from "../firebase/firestoreHelper";
 
 const tabRoutes = ["/dashboard", "/new-note", "/my-notes"];
 
+function formatTier(profile) {
+  const override = profile?.accessOverride || "none";
+
+  if (override === "tester") return "TESTER";
+  if (override === "comped") return "COMPED";
+
+  const subscription = profile?.subscription;
+
+  if (subscription?.status === "active" && !subscription?.cancel_at_period_end) {
+    return (subscription?.planName || profile?.tier || "paid").toUpperCase();
+  }
+
+  return (profile?.tier || "free").toUpperCase();
+}
+
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -30,7 +45,7 @@ export default function Layout() {
   );
 
   const [tabVal, setTabVal] = useState(currentIdx >= 0 ? currentIdx : 0);
-  const [tier, setTier] = useState("free");
+  const [tier, setTier] = useState("FREE");
 
   useEffect(() => {
     const idx = tabRoutes.findIndex((route) =>
@@ -46,7 +61,7 @@ export default function Layout() {
     async function loadProfile() {
       try {
         const profile = await getProfile();
-        setTier(profile?.tier || profile?.subscriptionTier || "free");
+        setTier(formatTier(profile));
       } catch (err) {
         console.error("Failed to load profile in Layout:", err);
       }
@@ -69,27 +84,54 @@ export default function Layout() {
     <Box
       sx={{
         minHeight: "100vh",
-        bgcolor: "#f7f8fa",
+        bgcolor: "#F6F4EE",
         display: "flex",
         flexDirection: "column",
         pb: "86px",
       }}
     >
-      <AppBar position="static" sx={{ bgcolor: "#111827" }} elevation={1}>
+      <AppBar
+        position="static"
+        sx={{
+          bgcolor: "#ffffff",
+          color: "#2F3437",
+          borderBottom: "1px solid #e5e7eb",
+        }}
+        elevation={0}
+      >
         <Toolbar sx={{ justifyContent: "space-between", gap: 2 }}>
-          <Typography
-            variant="h6"
-            component="h1"
-            sx={{ userSelect: "none", fontWeight: 700 }}
+          <Box
+            component={NavLink}
+            to="/dashboard"
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              textDecoration: "none",
+              minWidth: 0,
+            }}
           >
-            NoteWell AI
-          </Typography>
+            <Box
+              component="img"
+              src="/branding/logo-horizontal.png"
+              alt="NoteWell AI"
+              sx={{
+                height: { xs: 34, sm: 40 },
+                width: "auto",
+                objectFit: "contain",
+                display: "block",
+              }}
+            />
+          </Box>
 
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Chip
-              label={tier.toUpperCase()}
+              label={tier}
               size="small"
-              color={tier === "free" ? "default" : "success"}
+              color={tier === "FREE" ? "default" : "success"}
+              sx={{
+                fontWeight: 600,
+                display: { xs: "none", sm: "inline-flex" },
+              }}
             />
 
             <Link
@@ -97,12 +139,23 @@ export default function Layout() {
               to="/my-account"
               color="inherit"
               underline="none"
-              sx={{ display: { xs: "none", sm: "inline" } }}
+              sx={{
+                display: { xs: "none", sm: "inline" },
+                fontWeight: 600,
+              }}
             >
               Account
             </Link>
 
-            <Button variant="outlined" color="inherit" onClick={handleLogout}>
+            <Button
+              variant="outlined"
+              onClick={handleLogout}
+              sx={{
+                borderColor: "#d1d5db",
+                color: "#2F3437",
+                textTransform: "none",
+              }}
+            >
               Logout
             </Button>
           </Box>
