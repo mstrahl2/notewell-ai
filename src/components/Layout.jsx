@@ -100,28 +100,29 @@ export default function Layout() {
         elevation={0}
       >
         <Toolbar sx={{ justifyContent: "space-between", gap: 2 }}>
-          <Box
-            component={NavLink}
-            to="/dashboard"
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              textDecoration: "none",
-              minWidth: 0,
-            }}
-          >
-            <Box
-              component="img"
-              src="/branding/logo-horizontal.png"
-              alt="NoteWell AI"
-              sx={{
-                height: { xs: 34, sm: 40 },
-                width: "auto",
-                objectFit: "contain",
-                display: "block",
-              }}
-            />
-          </Box>
+        <Box
+  component={NavLink}
+  to="/dashboard"
+  sx={{
+    textDecoration: "none",
+    display: "flex",
+    alignItems: "center",
+    minWidth: 0,
+  }}
+>
+  <Box
+    sx={{
+      fontSize: { xs: "1.55rem", sm: "2rem" },
+      fontWeight: 700,
+      letterSpacing: "-0.045em",
+      color: "#2F3437",
+      lineHeight: 1,
+      whiteSpace: "nowrap",
+    }}
+  >
+    Note<span style={{ color: "#6CAAA5" }}>Well</span> AI
+  </Box>
+</Box>
 
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Chip
@@ -140,7 +141,7 @@ export default function Layout() {
               color="inherit"
               underline="none"
               sx={{
-                display: { xs: "none", sm: "inline" },
+                display: "inline" ,
                 fontWeight: 600,
               }}
             >
