@@ -9,30 +9,30 @@ function fallbackSoapNote(rawText, noteType, auditSafe = true) {
   switch (noteType) {
     case "intake":
       assessment =
-        "Initial clinical impressions were formed based on presenting concerns, psychosocial history, current symptoms, strengths, stressors, and stated treatment goals.";
+        "Initial impressions were documented from the information provided during intake, including presenting concerns, relevant history, current functioning, and stated treatment goals.";
       break;
     case "progress":
       assessment =
-        "Client progress was reviewed in relation to established treatment goals. Current symptoms, functional changes, barriers, coping strategies, and continued areas of clinical focus were discussed.";
+        "Session content reflected ongoing work toward treatment goals, including review of current stressors, coping responses, barriers, and areas requiring continued clinical attention.";
       break;
     case "crisis":
       assessment =
-        "Client presented with elevated distress. Risk and protective factors were assessed. Session focused on stabilization, safety planning, immediate coping strategies, and appropriate follow-up supports.";
+        "Session focused on elevated distress and immediate clinical needs as described. Risk-related content should be reviewed carefully and edited to match the clinician's full assessment.";
       break;
     case "discharge":
       assessment =
-        "Client discharge readiness was reviewed, including progress toward treatment goals, remaining needs, relapse prevention strategies, coping supports, and recommended follow-up care.";
+        "Discharge-related content was reviewed, including progress, remaining needs, coping supports, and recommended follow-up based on the information provided.";
       break;
     case "standard":
     default:
       assessment =
-        "Client engaged appropriately in session. Progress toward treatment goals was monitored, and therapeutic interventions were provided based on presenting needs.";
+        "The session addressed current concerns, functioning, coping strategies, and treatment-related needs based on the information provided.";
       break;
   }
 
   if (auditSafe) {
     assessment +=
-      " Clinical presentation supports medical necessity for continued treatment, as symptoms continue to affect functioning and require skilled therapeutic intervention.";
+      " Continued treatment may be clinically appropriate when symptoms or functional concerns remain present and require skilled intervention.";
   }
 
   return (
@@ -40,12 +40,12 @@ function fallbackSoapNote(rawText, noteType, auditSafe = true) {
     cleanedRawText +
     "\n\n" +
     "O (Objective):\n" +
-    "Client was alert, oriented, and engaged throughout session. Affect, mood, behavior, and participation were observed within the context of the session. No abnormal behaviors were noted unless otherwise documented.\n\n" +
+    "Session presentation and participation should be reviewed and edited by the clinician to reflect observed behavior, affect, engagement, and relevant clinical observations.\n\n" +
     "A (Assessment):\n" +
     assessment +
     "\n\n" +
     "P (Plan):\n" +
-    "Continue treatment as clinically indicated. Reinforce coping strategies, monitor symptom changes, and continue working toward established treatment goals in future sessions."
+    "Continue care as clinically indicated. Review goals, reinforce relevant coping strategies, monitor symptoms and functioning, and update the treatment plan as needed."
   );
 }
 

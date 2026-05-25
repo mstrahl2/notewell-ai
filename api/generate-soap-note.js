@@ -10,6 +10,22 @@ if (!getApps().length) {
   });
 }
 
+function getNoteTypeGuidance(noteType) {
+  switch (noteType) {
+    case "intake":
+      return "Prioritize presenting concerns, relevant history stated by the clinician, initial clinical impressions, strengths, barriers, and treatment goals.";
+    case "progress":
+      return "Prioritize movement toward goals, symptom/functioning changes, skills practiced, barriers, client response, and next clinical focus.";
+    case "crisis":
+      return "Prioritize risk/protective factors explicitly provided, stabilization, safety planning, supports, follow-up, and do not invent risk details.";
+    case "discharge":
+      return "Prioritize progress toward goals, discharge readiness, remaining needs, relapse prevention, supports, and follow-up recommendations.";
+    case "standard":
+    default:
+      return "Prioritize current symptoms/functioning, interventions used, client response, progress toward goals, and next steps.";
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method Not Allowed" });
@@ -43,6 +59,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing raw note text." });
     }
 
+    const noteTypeGuidance = getNoteTypeGuidance(noteType);
+
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -51,27 +69,50 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+        temperature: 0.55,
         input: [
           {
             role: "system",
             content:
-              "You are an assistant that drafts mental health SOAP notes. You do not diagnose, invent facts, or add unsupported clinical details. You produce concise, professional documentation that must be reviewed by a licensed clinician before use.",
+              "You draft mental health SOAP notes for licensed clinicians. Write like an experienced outpatient therapist, not like a template. Use only the information provided. Do not diagnose, invent facts, add unsupported risk, add medications, or make claims not present in the raw note. The result is a draft that requires clinician review.",
           },
           {
             role: "user",
             content: `
-Create a professional SOAP note from the session information below.
+Create a professional mental health SOAP note from the session information below.
 
-Rules:
-- Use only the information provided.
-- Do not invent symptoms, diagnoses, medications, treatment history, or risk details.
-- If something is not provided, keep language general.
-- Write in professional clinical documentation style.
-- Keep it concise and editable.
-- If auditSafe is true, include medical-necessity-supportive language without exaggerating.
-- Risk level: ${riskLevel}
+Clinical writing goals:
+- Make the note sound natural and clinician-written, not repetitive or canned.
+- Vary phrasing across sections.
+- Avoid generic repeated phrases such as "client engaged appropriately" unless clearly supported.
+- Do not use the exact same wording for Assessment or Plan every time.
+- Keep the note concise, specific, and editable.
+- Use DBT-informed language only when supported by the raw note, such as mindfulness, distress tolerance, emotion regulation, interpersonal effectiveness, validation, chain analysis, skills practice, diary card, or behavioral targets.
+- Include interventions only if they are mentioned or reasonably implied by the clinician's raw note.
+- Do not overstate progress, risk, medical necessity, or symptom severity.
+- If risk is not provided, do not add new risk content.
+- If risk is denied in the raw note, document it plainly.
+- If information is missing, keep wording general rather than inventing details.
+
+SOAP expectations:
+S: Client-reported concerns, symptoms, stressors, goals, subjective experience, or relevant updates.
+O: Observable/session-based facts only. Include participation, affect/mood/behavior only if supported or state generally that presentation was observed during session.
+A: Clinical interpretation of the provided content, progress/barriers, skill use, functional impact, and treatment relevance. Avoid diagnosis unless provided.
+P: Concrete next steps based on provided session content. Include continued therapy, skills practice, monitoring, homework, follow-up, or safety plan only if appropriate.
+
+Audit-safe mode:
+${
+  auditSafe
+    ? "- Include modest medical-necessity-supportive language only when supported by symptoms/functioning described. Do not exaggerate."
+    : "- Do not add medical-necessity language unless clearly present."
+}
+
+Note type guidance:
+${noteTypeGuidance}
+
+Metadata:
 - Note type: ${noteType}
-- Audit-safe mode: ${auditSafe ? "true" : "false"}
+- Risk level selected: ${riskLevel}
 - Client name: ${clientName || "Not listed"}
 - Session date: ${sessionDate || "Not listed"}
 - Session length: ${sessionLength || "Not listed"} minutes
@@ -111,11 +152,7 @@ ${rawText}
       });
     }
 
-    const text =
-      data.output_text ||
-      data.output?.[0]?.content?.[0]?.text ||
-      "";
-
+    const text = data.output_text || data.output?.[0]?.content?.[0]?.text || "";
     const parsed = JSON.parse(text);
 
     const formattedNote =
