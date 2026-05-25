@@ -13,16 +13,16 @@ if (!getApps().length) {
 function getNoteTypeGuidance(noteType) {
   switch (noteType) {
     case "intake":
-      return "Prioritize presenting concerns, relevant history stated by the clinician, initial clinical impressions, strengths, barriers, and treatment goals.";
+      return "Intake note: briefly capture presenting concern, relevant history if provided, initial impression, and initial plan. Do not over-expand.";
     case "progress":
-      return "Prioritize movement toward goals, symptom/functioning changes, skills practiced, barriers, client response, and next clinical focus.";
+      return "Progress note: briefly capture current update, intervention or skill discussed, clinical impression, and next step.";
     case "crisis":
-      return "Prioritize risk/protective factors explicitly provided, stabilization, safety planning, supports, follow-up, and do not invent risk details.";
+      return "Crisis note: briefly capture stated risk/protective factors, stabilization steps, safety planning, and follow-up only if provided. Do not invent risk details.";
     case "discharge":
-      return "Prioritize progress toward goals, discharge readiness, remaining needs, relapse prevention, supports, and follow-up recommendations.";
+      return "Discharge note: briefly capture progress, discharge readiness, remaining needs, relapse prevention, and follow-up only if provided.";
     case "standard":
     default:
-      return "Prioritize current symptoms/functioning, interventions used, client response, progress toward goals, and next steps.";
+      return "Standard session note: briefly capture client report, session presentation, clinical impression, and next step.";
   }
 }
 
@@ -69,42 +69,55 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
-        temperature: 0.55,
+        temperature: 0.25,
         input: [
           {
             role: "system",
             content:
-              "You draft mental health SOAP notes for licensed clinicians. Write like an experienced outpatient therapist, not like a template. Use only the information provided. Do not diagnose, invent facts, add unsupported risk, add medications, or make claims not present in the raw note. The result is a draft that requires clinician review.",
+              "You draft concise mental health SOAP notes for licensed clinicians. Your job is to summarize clinically relevant information, not rewrite the entire dictation. Do not diagnose, invent facts, add unsupported symptoms, add unsupported risk, add medications, or include details not provided. The result is a draft that requires clinician review.",
           },
           {
             role: "user",
             content: `
-Create a professional mental health SOAP note from the session information below.
+Create a concise mental health SOAP note from the clinician's raw note.
 
-Clinical writing goals:
-- Make the note sound natural and clinician-written, not repetitive or canned.
-- Vary phrasing across sections.
-- Avoid generic repeated phrases such as "client engaged appropriately" unless clearly supported.
-- Do not use the exact same wording for Assessment or Plan every time.
-- Keep the note concise, specific, and editable.
-- Use DBT-informed language only when supported by the raw note, such as mindfulness, distress tolerance, emotion regulation, interpersonal effectiveness, validation, chain analysis, skills practice, diary card, or behavioral targets.
-- Include interventions only if they are mentioned or reasonably implied by the clinician's raw note.
-- Do not overstate progress, risk, medical necessity, or symptom severity.
-- If risk is not provided, do not add new risk content.
-- If risk is denied in the raw note, document it plainly.
-- If information is missing, keep wording general rather than inventing details.
+Primary goal:
+Summarize only clinically relevant information without repeating the same content across sections.
 
-SOAP expectations:
-S: Client-reported concerns, symptoms, stressors, goals, subjective experience, or relevant updates.
-O: Observable/session-based facts only. Include participation, affect/mood/behavior only if supported or state generally that presentation was observed during session.
-A: Clinical interpretation of the provided content, progress/barriers, skill use, functional impact, and treatment relevance. Avoid diagnosis unless provided.
-P: Concrete next steps based on provided session content. Include continued therapy, skills practice, monitoring, homework, follow-up, or safety plan only if appropriate.
+Strict style rules:
+- Be brief.
+- Use short, direct clinical sentences.
+- Prefer 1 to 3 short sentences per SOAP section.
+- Do not restate the full dictation.
+- Do not paraphrase the same idea multiple times.
+- Do not repeat symptoms/stressors in S, A, and P.
+- Do not use filler or boilerplate.
+- Do not write long paragraphs.
+- Do not over-explain.
+- Do not add generic clinical language unless it is needed.
+- Do not say the same thing in different words.
+- Do not invent interventions, symptoms, diagnoses, medications, risk, or progress.
+
+SOAP section rules:
+S: Client-reported concerns, symptoms, stressors, or updates only.
+O: Observable/session facts only. Do not repeat subjective symptoms from S.
+A: Brief clinical impression, progress/barrier, or treatment relevance. Do not repeat S or O.
+P: Brief next step(s). Do not repeat A.
+
+DBT/modality language:
+Use DBT terms only if clearly supported by the raw note.
+Examples: mindfulness, distress tolerance, emotion regulation, interpersonal effectiveness, validation, chain analysis, diary card, behavioral targets.
+
+Risk:
+- If risk is denied in the raw note, document it briefly.
+- If risk is not mentioned, do not add risk content.
+- If risk is present, only document what was provided.
 
 Audit-safe mode:
 ${
   auditSafe
-    ? "- Include modest medical-necessity-supportive language only when supported by symptoms/functioning described. Do not exaggerate."
-    : "- Do not add medical-necessity language unless clearly present."
+    ? "If symptoms/functioning support continued care, include only one brief treatment-relevance statement. Do not exaggerate medical necessity."
+    : "Do not add medical-necessity language."
 }
 
 Note type guidance:
