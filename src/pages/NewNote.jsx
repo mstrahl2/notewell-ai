@@ -19,6 +19,7 @@ import StopIcon from "@mui/icons-material/Stop";
 import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import SaveIcon from "@mui/icons-material/Save";
+import { auth } from "../firebase/firebaseConfig";
 import { addNote as saveNote, getLastNote } from "../firebase/firestoreHelper";
 import generateSoapNote from "../utils/generateSoapNote";
 
@@ -78,6 +79,21 @@ function cleanDictationText(text) {
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }
 
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onloadend = () => {
+      const result = reader.result || "";
+      const base64 = String(result).split(",")[1];
+      resolve(base64);
+    };
+
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 export default function NewNote() {
   const navigate = useNavigate();
 
@@ -89,23 +105,24 @@ export default function NewNote() {
   const [noteType, setNoteType] = useState("standard");
 
   const [rawNote, setRawNote] = useState("");
-  const [interimText, setInterimText] = useState("");
   const [formattedNote, setFormattedNote] = useState("");
   const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [auditSafe] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const recognitionRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const streamRef = useRef(null);
 
   const applyTemplate = (template) => {
     setTitle(template.name);
     setNoteType(template.noteType);
     setRawNote(template.rawNote);
     setFormattedNote("");
-    setInterimText("");
     setError("");
     setSuccess("");
   };
@@ -127,7 +144,6 @@ export default function NewNote() {
       setNoteType(last.noteType || "standard");
       setRawNote(last.rawNote || "");
       setFormattedNote("");
-      setInterimText("");
       setError("");
       setSuccess("Last session loaded.");
     } catch (err) {
@@ -136,110 +152,137 @@ export default function NewNote() {
     }
   };
 
-  const setupRecognition = () => {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      setError(
-        "Voice dictation is not supported on this device/browser."
-      );
-      return null;
-    }
-
-    const recognition = new SpeechRecognition();
-
-    // IMPORTANT FOR IPHONE
-    recognition.continuous = false;
-
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-      setRecording(true);
+  const transcribeAudio = async (blob) => {
+    try {
+      setTranscribing(true);
       setError("");
-    };
+      setSuccess("");
 
-    recognition.onresult = (event) => {
-      let finalTranscript = "";
-      let interimTranscript = "";
+      const token = await auth.currentUser.getIdToken();
+      const audioBase64 = await blobToBase64(blob);
 
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
+      const res = await fetch("/api/transcribe-audio", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          audioBase64,
+          mimeType: blob.type || "audio/webm",
+          fileName: "dictation.webm",
+        }),
+      });
 
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript + " ";
-        } else {
-          interimTranscript += transcript;
-        }
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to transcribe audio.");
       }
 
-      if (finalTranscript.trim()) {
-        setRawNote((prev) =>
-          cleanDictationText(`${prev} ${finalTranscript}`)
-        );
-      }
+      const transcript = cleanDictationText(data.transcript || "");
 
-      setInterimText(interimTranscript);
-    };
-
-    recognition.onerror = (event) => {
-      console.error("Speech recognition error:", event);
-
-      if (
-        event.error === "no-speech" ||
-        event.error === "aborted"
-      ) {
+      if (!transcript) {
+        setError("No speech was detected. Please try again.");
         return;
       }
 
+      setRawNote((prev) => cleanDictationText(`${prev} ${transcript}`));
+      setSuccess("Dictation transcribed.");
+    } catch (err) {
+      console.error("Transcription error:", err);
+      setError(err.message || "Failed to transcribe dictation.");
+    } finally {
+      setTranscribing(false);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      setError("");
+      setSuccess("");
+      setFormattedNote("");
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError("Microphone recording is not supported on this device/browser.");
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      audioChunksRef.current = [];
+
+      const preferredTypes = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+        "audio/mpeg",
+      ];
+
+      const supportedType =
+        preferredTypes.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+
+      const recorder = supportedType
+        ? new MediaRecorder(stream, { mimeType: supportedType })
+        : new MediaRecorder(stream);
+
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        const blob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+
+        streamRef.current?.getTracks()?.forEach((track) => track.stop());
+        streamRef.current = null;
+
+        if (blob.size < 1000) {
+          setError("Recording was too short. Please try again.");
+          return;
+        }
+
+        await transcribeAudio(blob);
+      };
+
+      recorder.start();
+      setRecording(true);
+    } catch (err) {
+      console.error("Recording error:", err);
       setRecording(false);
 
-      setError(
-        "Voice dictation encountered an issue. Please try again."
-      );
-    };
-
-    recognition.onend = () => {
-      setInterimText("");
-
-      // AUTO-RESTART FOR MOBILE
-      if (recording) {
-        try {
-          recognition.start();
-        } catch (err) {
-          console.error("Restart failed:", err);
-          setRecording(false);
-        }
+      if (err.name === "NotAllowedError" || err.name === "SecurityError") {
+        setError("Microphone permission was denied. Please allow microphone access.");
+      } else {
+        setError("Unable to start recording. Please try again.");
       }
-    };
+    }
+  };
 
-    return recognition;
+  const stopRecording = () => {
+    try {
+      if (mediaRecorderRef.current?.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+
+      setRecording(false);
+    } catch (err) {
+      console.error("Stop recording error:", err);
+      setRecording(false);
+      setError("Unable to stop recording.");
+    }
   };
 
   const handleRecord = () => {
-    setError("");
-    setSuccess("");
-
-    if (!recognitionRef.current) {
-      recognitionRef.current = setupRecognition();
-    }
-
-    if (!recognitionRef.current) return;
-
     if (recording) {
-      recognitionRef.current.stop();
-      setRecording(false);
-      return;
-    }
-
-    try {
-      recognitionRef.current.start();
-      setRecording(true);
-    } catch (err) {
-      console.error(err);
-      setError("Unable to start voice dictation.");
+      stopRecording();
+    } else {
+      startRecording();
     }
   };
 
@@ -251,7 +294,6 @@ export default function NewNote() {
 
   const handleClearDictation = () => {
     setRawNote("");
-    setInterimText("");
     setFormattedNote("");
     setError("");
     setSuccess("");
@@ -283,17 +325,12 @@ export default function NewNote() {
         "\n\nSession Summary:\n" +
         cleanedRaw;
 
-      const formatted = await generateSoapNote(
-        metadataText,
-        noteType,
-        auditSafe,
-        {
-          clientName,
-          sessionDate,
-          sessionLength,
-          riskLevel,
-        }
-      );
+      const formatted = await generateSoapNote(metadataText, noteType, auditSafe, {
+        clientName,
+        sessionDate,
+        sessionLength,
+        riskLevel,
+      });
 
       setFormattedNote(formatted);
       setSuccess("SOAP note generated.");
@@ -355,29 +392,23 @@ export default function NewNote() {
     <Box maxWidth={900} mx="auto" sx={{ p: { xs: 1, sm: 3 } }}>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
         <Typography variant="h4">New Note</Typography>
-        {recording && <Chip label="Listening" color="error" size="small" />}
+        {recording && <Chip label="Recording" color="error" size="small" />}
+        {transcribing && <Chip label="Transcribing" color="primary" size="small" />}
       </Stack>
 
-      {recording && <LinearProgress color="error" sx={{ mb: 2 }} />}
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
+      {(recording || transcribing || generating) && (
+        <LinearProgress color={recording ? "error" : "primary"} sx={{ mb: 2 }} />
       )}
 
-      {success && (
-        <Alert severity="success" sx={{ mb: 2 }}>
-          {success}
-        </Alert>
-      )}
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="h6">Voice Dictation</Typography>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Speak naturally. NoteWell AI will clean and structure your session
-          notes into professional SOAP documentation.
+          Tap Start, speak naturally, then tap Stop. NoteWell AI will transcribe
+          your dictation into the raw note field.
         </Typography>
 
         <Button
@@ -387,16 +418,132 @@ export default function NewNote() {
           color={recording ? "error" : "primary"}
           startIcon={recording ? <StopIcon /> : <MicIcon />}
           onClick={handleRecord}
+          disabled={transcribing || generating || saving}
         >
-          {recording ? "Stop Dictation" : "Start Dictation"}
+          {recording
+            ? "Stop Dictation"
+            : transcribing
+            ? "Transcribing..."
+            : "Start Dictation"}
+        </Button>
+      </Paper>
+
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Typography variant="h6" gutterBottom>
+          Quick Start
+        </Typography>
+
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Button variant="contained" onClick={handleUseLast}>
+            Use Last Session
+          </Button>
+
+          {templates.map((template) => (
+            <Button
+              key={template.name}
+              variant="outlined"
+              onClick={() => applyTemplate(template)}
+            >
+              {template.name}
+            </Button>
+          ))}
+        </Stack>
+      </Paper>
+
+      <Stack spacing={2}>
+        <TextField label="Note Title" value={title} onChange={(e) => setTitle(e.target.value)} fullWidth />
+
+        <TextField label="Client Name" value={clientName} onChange={(e) => setClientName(e.target.value)} fullWidth />
+
+        <TextField
+          label="Session Date"
+          type="date"
+          value={sessionDate}
+          onChange={(e) => setSessionDate(e.target.value)}
+          fullWidth
+          InputLabelProps={{ shrink: true }}
+        />
+
+        <TextField select label="Session Length" value={sessionLength} onChange={(e) => setSessionLength(e.target.value)} fullWidth>
+          {["15", "30", "45", "50", "53", "60", "90"].map((v) => (
+            <MenuItem key={v} value={v}>{v} minutes</MenuItem>
+          ))}
+        </TextField>
+
+        <TextField select label="Risk Level" value={riskLevel} onChange={(e) => setRiskLevel(e.target.value)} fullWidth>
+          <MenuItem value="none">None / Not Assessed</MenuItem>
+          <MenuItem value="low">Low Risk</MenuItem>
+          <MenuItem value="moderate">Moderate Risk</MenuItem>
+          <MenuItem value="high">High Risk</MenuItem>
+        </TextField>
+
+        <TextField select label="Note Type" value={noteType} onChange={(e) => setNoteType(e.target.value)} fullWidth>
+          {noteTypes.map((note) => (
+            <MenuItem key={note.value} value={note.value}>{note.label}</MenuItem>
+          ))}
+        </TextField>
+
+        <TextField
+          label="Raw Note / Dictation"
+          multiline
+          minRows={8}
+          value={rawNote}
+          onChange={(e) => setRawNote(e.target.value)}
+          fullWidth
+        />
+
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+          <Button variant="outlined" onClick={handleCleanRawNote} startIcon={<AutoFixHighIcon />}>
+            Clean Dictation
+          </Button>
+
+          <Button variant="outlined" color="error" onClick={handleClearDictation}>
+            Clear
+          </Button>
+        </Stack>
+
+        <Divider />
+
+        <Button
+          variant="contained"
+          size="large"
+          onClick={handleGenerate}
+          disabled={generating || transcribing}
+          startIcon={<AutoFixHighIcon />}
+        >
+          {generating ? "Generating..." : "Generate SOAP Note"}
         </Button>
 
-        {interimText && (
-          <Alert severity="info" sx={{ mt: 2 }}>
-            Hearing: {interimText}
-          </Alert>
-        )}
-      </Paper>
+        <TextField
+          label="Formatted SOAP Note"
+          multiline
+          minRows={9}
+          value={formattedNote}
+          onChange={(e) => setFormattedNote(e.target.value)}
+          fullWidth
+        />
+
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+          <Button
+            variant="outlined"
+            onClick={handleCopyFormatted}
+            disabled={!formattedNote.trim()}
+            startIcon={<ContentCopyIcon />}
+          >
+            Copy SOAP Note
+          </Button>
+
+          <Button
+            variant="contained"
+            color="success"
+            onClick={handleSave}
+            disabled={saving}
+            startIcon={<SaveIcon />}
+          >
+            {saving ? "Saving..." : "Save Note"}
+          </Button>
+        </Stack>
+      </Stack>
     </Box>
   );
 }
