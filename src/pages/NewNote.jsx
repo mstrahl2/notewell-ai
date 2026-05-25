@@ -94,7 +94,7 @@ export default function NewNote() {
   const [recording, setRecording] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [auditSafe, setAuditSafe] = useState(true);
+  const [auditSafe] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -127,7 +127,6 @@ export default function NewNote() {
       setNoteType(last.noteType || "standard");
       setRawNote(last.rawNote || "");
       setFormattedNote("");
-      setAuditSafe(last.auditSafe ?? true);
       setInterimText("");
       setError("");
       setSuccess("Last session loaded.");
@@ -140,73 +139,82 @@ export default function NewNote() {
   const setupRecognition = () => {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
-  
+
     if (!SpeechRecognition) {
       setError(
-        "Voice dictation is limited on iPhone browsers. You can still use the iPhone keyboard microphone for dictation."
+        "Voice dictation is not supported on this device/browser."
       );
       return null;
     }
-  
+
     const recognition = new SpeechRecognition();
-  
-    recognition.continuous = true;
+
+    // IMPORTANT FOR IPHONE
+    recognition.continuous = false;
+
     recognition.interimResults = true;
     recognition.lang = "en-US";
     recognition.maxAlternatives = 1;
-  
+
     recognition.onstart = () => {
       setRecording(true);
       setError("");
     };
-  
+
     recognition.onresult = (event) => {
       let finalTranscript = "";
       let interimTranscript = "";
-  
+
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
-  
+
         if (event.results[i].isFinal) {
           finalTranscript += transcript + " ";
         } else {
           interimTranscript += transcript;
         }
       }
-  
+
       if (finalTranscript.trim()) {
         setRawNote((prev) =>
           cleanDictationText(`${prev} ${finalTranscript}`)
         );
       }
-  
+
       setInterimText(interimTranscript);
     };
-  
+
     recognition.onerror = (event) => {
       console.error("Speech recognition error:", event);
-  
-      // Ignore harmless mobile/browser interruptions
+
       if (
-        event.error === "aborted" ||
         event.error === "no-speech" ||
-        event.error === "audio-capture"
+        event.error === "aborted"
       ) {
         return;
       }
-  
+
       setRecording(false);
-  
+
       setError(
-        "Voice dictation was interrupted. On iPhone, using the keyboard microphone is often more reliable."
+        "Voice dictation encountered an issue. Please try again."
       );
     };
-  
+
     recognition.onend = () => {
-      setRecording(false);
       setInterimText("");
+
+      // AUTO-RESTART FOR MOBILE
+      if (recording) {
+        try {
+          recognition.start();
+        } catch (err) {
+          console.error("Restart failed:", err);
+          setRecording(false);
+        }
+      }
     };
-  
+
     return recognition;
   };
 
@@ -231,7 +239,7 @@ export default function NewNote() {
       setRecording(true);
     } catch (err) {
       console.error(err);
-      setError("Recording is already starting. Try again in a moment.");
+      setError("Unable to start voice dictation.");
     }
   };
 
@@ -368,8 +376,8 @@ export default function NewNote() {
         <Typography variant="h6">Voice Dictation</Typography>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Speak naturally. NoteWell AI will clean the dictation and format it
-          into a SOAP note.
+          Speak naturally. NoteWell AI will clean and structure your session
+          notes into professional SOAP documentation.
         </Typography>
 
         <Button
@@ -389,159 +397,6 @@ export default function NewNote() {
           </Alert>
         )}
       </Paper>
-
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Typography variant="h6" gutterBottom>
-          Quick Start
-        </Typography>
-
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-          <Button variant="contained" onClick={handleUseLast}>
-            Use Last Session
-          </Button>
-
-          {templates.map((template) => (
-            <Button
-              key={template.name}
-              variant="outlined"
-              onClick={() => applyTemplate(template)}
-            >
-              {template.name}
-            </Button>
-          ))}
-        </Stack>
-      </Paper>
-
-      <Stack spacing={2}>
-        <TextField
-          label="Note Title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          fullWidth
-        />
-
-        <TextField
-          label="Client Name"
-          value={clientName}
-          onChange={(e) => setClientName(e.target.value)}
-          fullWidth
-        />
-
-        <TextField
-          label="Session Date"
-          type="date"
-          value={sessionDate}
-          onChange={(e) => setSessionDate(e.target.value)}
-          fullWidth
-          InputLabelProps={{ shrink: true }}
-        />
-
-        <TextField
-          select
-          label="Session Length"
-          value={sessionLength}
-          onChange={(e) => setSessionLength(e.target.value)}
-          fullWidth
-        >
-          {["15", "30", "45", "50", "53", "60", "90"].map((v) => (
-            <MenuItem key={v} value={v}>
-              {v} minutes
-            </MenuItem>
-          ))}
-        </TextField>
-
-        <TextField
-          select
-          label="Risk Level"
-          value={riskLevel}
-          onChange={(e) => setRiskLevel(e.target.value)}
-          fullWidth
-        >
-          <MenuItem value="none">None / Not Assessed</MenuItem>
-          <MenuItem value="low">Low Risk</MenuItem>
-          <MenuItem value="moderate">Moderate Risk</MenuItem>
-          <MenuItem value="high">High Risk</MenuItem>
-        </TextField>
-
-        <TextField
-          select
-          label="Note Type"
-          value={noteType}
-          onChange={(e) => setNoteType(e.target.value)}
-          fullWidth
-        >
-          {noteTypes.map((note) => (
-            <MenuItem key={note.value} value={note.value}>
-              {note.label}
-            </MenuItem>
-          ))}
-        </TextField>
-
-        <TextField
-          label="Raw Note / Dictation"
-          multiline
-          minRows={8}
-          value={rawNote}
-          onChange={(e) => setRawNote(e.target.value)}
-          fullWidth
-        />
-
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-          <Button
-            variant="outlined"
-            onClick={handleCleanRawNote}
-            startIcon={<AutoFixHighIcon />}
-          >
-            Clean Dictation
-          </Button>
-
-          <Button variant="outlined" color="error" onClick={handleClearDictation}>
-            Clear
-          </Button>
-        </Stack>
-
-        <Divider />
-
-        <Button
-          variant="contained"
-          size="large"
-          onClick={handleGenerate}
-          disabled={generating}
-          startIcon={<AutoFixHighIcon />}
-        >
-          {generating ? "Generating..." : "Generate SOAP Note"}
-        </Button>
-
-        <TextField
-          label="Formatted SOAP Note"
-          multiline
-          minRows={9}
-          value={formattedNote}
-          onChange={(e) => setFormattedNote(e.target.value)}
-          fullWidth
-        />
-
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-          <Button
-            variant="outlined"
-            onClick={handleCopyFormatted}
-            disabled={!formattedNote.trim()}
-            startIcon={<ContentCopyIcon />}
-          >
-            Copy SOAP Note
-          </Button>
-
-          <Button
-            variant="contained"
-            color="success"
-            onClick={handleSave}
-            disabled={saving}
-            startIcon={<SaveIcon />}
-          >
-            {saving ? "Saving..." : "Save Note"}
-          </Button>
-        </Stack>
-      </Stack>
     </Box>
   );
 }
